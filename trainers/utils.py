@@ -131,3 +131,66 @@ def compute_final_metric(all_relative_errors: torch.Tensor) -> float:
     final_metric = torch.mean(median_error_per_chunk)
     
     return final_metric.item()
+
+def create_all_to_all_pairs(u_data: torch.Tensor , x_data: torch.Tensor, c_data: torch.Tensor, metadata: Metadata):
+    """
+        This code is mainly used for time-dependent PDE, for constructing the all-to-all pairs dataset.
+    """
+    num_samples, num_timesteps, num_nodes, num_vars = u_data.shape
+    device = u_data.device
+    dtype = u_data.dtype
+
+    if metadata.domain_t is not None:
+        t_start, t_end = metadata.domain_t  # For example, (0.0, 1.0)
+    else:
+        raise ValueError("metadata.domain_t is None. Cannot compute actual time values.")
+
+    # Compute actual time values
+    time_values = torch.linspace(t_start, t_end, num_timesteps, device=device, dtype=dtype)  # Shape: [num_timesteps]
+
+    # Create all possible combinations of t_in and t_out where t_out > t_in
+    t_in_indices, t_out_indices = torch.meshgrid(torch.arange(num_timesteps, device=device), torch.arange(num_timesteps, device=device), indexing='ij')
+    t_in_indices = t_in_indices.flatten()  # Shape: [num_timesteps^2]
+    t_out_indices = t_out_indices.flatten()
+
+    # Only keep pairs where t_out > t_in, but it can be optimized with max_time_dff
+    # for example:
+    # max_time_diff = 5
+    # time_diffs = t_out_indices - t_in_indices
+    # mask = (t_out_indices > t_in_indices) & (time_diffs <= max_time_diff)
+    mask = t_out_indices > t_in_indices
+    t_in_indices = t_in_indices[mask]
+    t_out_indices = t_out_indices[mask]
+
+    num_pairs = t_in_indices.shape[0]
+    assert num_timesteps * (num_timesteps - 1) // 2 == num_pairs, f"Expected {num_timesteps * (num_timesteps - 1) // 2} pairs for every data, but found {num_pairs}."
+
+    # Expand sample indices
+    sample_indices = torch.arange(num_samples, device=device).unsqueeze(1).repeat(1, num_pairs).flatten()  # Shape: [num_samples * num_pairs]
+
+    # Repeat t_in_indices and t_out_indices for all samples
+    t_in_indices_expanded = t_in_indices.unsqueeze(0).repeat(num_samples, 1).flatten()  # Shape: [num_samples * num_pairs]
+    t_out_indices_expanded = t_out_indices.unsqueeze(0).repeat(num_samples, 1).flatten()
+
+    # Get u_in and u_out
+    u_in = u_data[sample_indices, t_in_indices_expanded, :, :]  # Shape: [num_samples * num_pairs, num_nodes, num_vars]
+    u_out = u_data[sample_indices, t_out_indices_expanded, :, :]  # Same shape
+
+    # Get x_in and x_out
+    x_in = x_data[sample_indices, t_in_indices_expanded, :, :]  # Shape: [num_samples * num_pairs, num_nodes, num_dims]
+    x_out = x_data[sample_indices, t_out_indices_expanded, :, :]  # Same shape
+
+    # Map time indices to actual time values
+    t_in_times = time_values[t_in_indices_expanded]  # Shape: [num_samples * num_pairs]
+    t_out_times = time_values[t_out_indices_expanded]  # Same shape
+
+    # Compute lead_times and time_diffs in actual time units
+    lead_times = t_out_times.unsqueeze(1)  # Shape: [num_samples * num_pairs, 1]
+    time_diffs = (t_out_times - t_in_times).unsqueeze(1)  # Shape: [num_samples * num_pairs, 1]
+
+    if c_data is not None:
+        c_in = c_data[sample_indices, t_in_indices_expanded, :, :]  # Shape: [num_samples * num_pairs, num_nodes, num_c_vars]
+    else:
+        c_in = None
+
+    return u_in, u_out, x_in, x_out, lead_times, time_diffs, c_in

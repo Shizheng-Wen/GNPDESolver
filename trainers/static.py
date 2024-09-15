@@ -10,10 +10,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from .base import TrainerBase
-from .utils import manual_seed
+from .utils import manual_seed, compute_batch_errors, compute_final_metric
 from architectures.gino import GINO
 from data.dataset import Metadata, DATASET_METADATA
-from .utils import compute_batch_errors, compute_final_metric
 
 
 
