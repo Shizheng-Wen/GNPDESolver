@@ -1,0 +1,12 @@
+.DS_Store
+
+.results/
+.loss/
+.ckpt/
+.database/
+
+.vscode/
+
+tests/test_model
+
+**__pycache__**
