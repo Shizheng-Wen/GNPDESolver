@@ -81,21 +81,21 @@ class TrainerBase:
         raise NotImplementedError
 # ------------ train ------------ #
     def train_step(self, batch):
-        c_batch, u_batch, x_batch = batch
-        c_batch, u_batch, x_batch = c_batch.to(self.device), u_batch.to(self.device), x_batch.to(self.device)
-        c_batch, u_batch, x_batch = c_batch.squeeze(1), u_batch.squeeze(1), x_batch.squeeze(1)
-        pred = self.model(x=c_batch, input_geom=x_batch[0:1], latent_queries=self.latent_queries, output_queries=x_batch[0])
-        return self.loss_fn(pred, u_batch)
+        x_batch, y_batch, coord_batch = batch
+        x_batch, y_batch, coord_batch = x_batch.to(self.device), y_batch.to(self.device), coord_batch.to(self.device)
+        x_batch, y_batch, coord_batch = x_batch.squeeze(1), y_batch.squeeze(1), coord_batch.squeeze(1)
+        pred = self.model(x=x_batch, input_geom=coord_batch[0:1], latent_queries=self.latent_queries, output_queries=coord_batch[0])
+        return self.loss_fn(pred, y_batch)
     
     def validate(self, loader):
         self.model.eval()
         total_loss = 0.0
         with torch.no_grad():
-            for c_batch, u_batch, x_batch in loader:
-                c_batch, u_batch, x_batch = c_batch.to(self.device), u_batch.to(self.device), x_batch.to(self.device)
-                c_batch, u_batch, x_batch = c_batch.squeeze(1), u_batch.squeeze(1), x_batch.squeeze(1)
-                pred = self.model(x=c_batch, input_geom=x_batch[0:1], latent_queries=self.latent_queries, output_queries=x_batch[0])
-                loss = self.loss_fn(pred, u_batch)
+            for x_batch, y_batch, coord_batch in loader:
+                x_batch, y_batch, coord_batch = x_batch.to(self.device), y_batch.to(self.device), coord_batch.to(self.device)
+                x_batch, y_batch, coord_batch = x_batch.squeeze(1), y_batch.squeeze(1), coord_batch.squeeze(1)
+                pred = self.model(x=x_batch, input_geom=coord_batch[0:1], latent_queries=self.latent_queries, output_queries=coord_batch[0])
+                loss = self.loss_fn(pred, y_batch)
                 total_loss += loss.item()
         return total_loss / len(loader)
 

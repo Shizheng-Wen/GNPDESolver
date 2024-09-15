@@ -113,18 +113,18 @@ class StaticTrainer(TrainerBase):
     
     def test(self):
         self.model.eval()
+        self.model.to(self.device)
         all_relative_errors = []
         with torch.no_grad():
-            for i, (c_sample, u_sample, x_sample) in enumerate(self.test_loader):
-                c_sample, u_sample, x_sample = c_sample.to(self.device), u_sample.to(self.device), x_sample.to(self.device) # Shape: [batch_size, num_timesteps, num_nodes, num_channels]
-                self.model.to(self.device)
-                pred = self.model(x=c_sample.squeeze(1), input_geom=x_sample.squeeze(1)[0:1], latent_queries=self.latent_queries, output_queries=x_sample.squeeze(1)[0]).unsqueeze(1) # Shape: [batch_size, 1, num_nodes, num_channels]
-                relative_errors = compute_batch_errors(u_sample, pred, self.metadata)
+            for i, (x_sample, y_sample, coord_sample) in enumerate(self.test_loader):
+                x_sample, y_sample, coord_sample = x_sample.to(self.device), y_sample.to(self.device), coord_sample.to(self.device) # Shape: [batch_size, num_timesteps, num_nodes, num_channels]
+                pred = self.model(x=x_sample.squeeze(1), input_geom=coord_sample.squeeze(1)[0:1], latent_queries=self.latent_queries, output_queries=coord_sample.squeeze(1)[0]).unsqueeze(1) # Shape: [batch_size, 1, num_nodes, num_channels]
+                relative_errors = compute_batch_errors(y_sample, pred, self.metadata)
                 all_relative_errors.append(relative_errors)
         all_relative_errors = torch.cat(all_relative_errors, dim=0)
         final_metric = compute_final_metric(all_relative_errors)
         self.config.datarow["relative error (poseidon_metric)"] = final_metric
-        self.plot_results(x_sample.squeeze(1)[45], c_sample.squeeze(1)[45], u_sample.squeeze(1)[45], pred.squeeze(1)[45])
+        self.plot_results(coord_sample.squeeze(1)[45], x_sample.squeeze(1)[45], y_sample.squeeze(1)[45], pred.squeeze(1)[45])
             
     def plot_results(self, coords, input, gt, pred):
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
