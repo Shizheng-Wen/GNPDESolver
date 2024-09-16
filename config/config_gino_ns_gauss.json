@@ -28,7 +28,7 @@
         "name": "NS-Gauss",
         "metaname": "rigno-unstructured/NS-Gauss",
         "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
-        "train_size": 1024,
+        "train_size": 10,
         "val_size": 128,
         "test_size": 256,
         "batch_size": 64,

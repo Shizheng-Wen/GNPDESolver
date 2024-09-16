@@ -26,12 +26,12 @@ class TrainerBase:
 
         self.device = self.setup_config["device"]
         manual_seed(self.setup_config["seed"])
-        if self.setup_config["dtype"] == "float":
+        if self.setup_config["dtype"] == "float" or self.setup_config["dtype"] == "torch.float32":
             self.dtype = torch.float32
-        elif self.setup_config['dtype'] == "dobule":
+        elif self.setup_config['dtype'] == "dobule" or self.setup_config["dtype"] == "torch.float64":
             self.dtype = torch.float64
         else:
-            raise 
+            raise ValueError(f"Invalid dtype: {self.setup_config['dtype']}")
         self.loss_fn = nn.MSELoss()
         
         self.init_dataset(self.dataset_config)

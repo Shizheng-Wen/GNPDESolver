@@ -82,7 +82,7 @@ class StaticTrainer(TrainerBase):
             if c_tensor is not None:
                 c_tensor = c_tensor.reshape(c_tensor.shape[0], -1) # [num_samples, num_nodes]
                 c_tensor = c_tensor[:, None, :, None] # [num_samples, 1, num_nodes, 1]
-        
+        brekpoint()
         active_vars = self.metadata.active_variables
         u_tensor = u_tensor[..., active_vars]
         self.num_input_channels = c_tensor.shape[-1]

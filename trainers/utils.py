@@ -132,13 +132,11 @@ def compute_final_metric(all_relative_errors: torch.Tensor) -> float:
     
     return final_metric.item()
 
-def create_all_to_all_pairs(u_data: torch.Tensor , x_data: torch.Tensor, c_data: torch.Tensor, metadata: Metadata):
+def create_all_to_all_pairs(u_data: np.array , x_data: np.array, c_data: np.array, metadata: Metadata):
     """
         This code is mainly used for time-dependent PDE, for constructing the all-to-all pairs dataset.
     """
     num_samples, num_timesteps, num_nodes, num_vars = u_data.shape
-    device = u_data.device
-    dtype = u_data.dtype
 
     if metadata.domain_t is not None:
         t_start, t_end = metadata.domain_t  # For example, (0.0, 1.0)
@@ -146,10 +144,10 @@ def create_all_to_all_pairs(u_data: torch.Tensor , x_data: torch.Tensor, c_data:
         raise ValueError("metadata.domain_t is None. Cannot compute actual time values.")
 
     # Compute actual time values
-    time_values = torch.linspace(t_start, t_end, num_timesteps, device=device, dtype=dtype)  # Shape: [num_timesteps]
+    time_values = np.linspace(t_start, t_end, num_timesteps)  # Shape: [num_timesteps]
 
     # Create all possible combinations of t_in and t_out where t_out > t_in
-    t_in_indices, t_out_indices = torch.meshgrid(torch.arange(num_timesteps, device=device), torch.arange(num_timesteps, device=device), indexing='ij')
+    t_in_indices, t_out_indices = np.meshgrid(np.arange(num_timesteps), np.arange(num_timesteps), indexing='ij')
     t_in_indices = t_in_indices.flatten()  # Shape: [num_timesteps^2]
     t_out_indices = t_out_indices.flatten()
 
@@ -166,11 +164,11 @@ def create_all_to_all_pairs(u_data: torch.Tensor , x_data: torch.Tensor, c_data:
     assert num_timesteps * (num_timesteps - 1) // 2 == num_pairs, f"Expected {num_timesteps * (num_timesteps - 1) // 2} pairs for every data, but found {num_pairs}."
 
     # Expand sample indices
-    sample_indices = torch.arange(num_samples, device=device).unsqueeze(1).repeat(1, num_pairs).flatten()  # Shape: [num_samples * num_pairs]
+    sample_indices = np.repeat(np.arange(num_samples), num_pairs)  # Shape: [num_samples * num_pairs]
 
     # Repeat t_in_indices and t_out_indices for all samples
-    t_in_indices_expanded = t_in_indices.unsqueeze(0).repeat(num_samples, 1).flatten()  # Shape: [num_samples * num_pairs]
-    t_out_indices_expanded = t_out_indices.unsqueeze(0).repeat(num_samples, 1).flatten()
+    t_in_indices_expanded = np.tile(t_in_indices, num_samples)  # Shape: [num_samples * num_pairs]
+    t_out_indices_expanded = np.tile(t_out_indices, num_samples)
 
     # Get u_in and u_out
     u_in = u_data[sample_indices, t_in_indices_expanded, :, :]  # Shape: [num_samples * num_pairs, num_nodes, num_vars]
@@ -185,8 +183,8 @@ def create_all_to_all_pairs(u_data: torch.Tensor , x_data: torch.Tensor, c_data:
     t_out_times = time_values[t_out_indices_expanded]  # Same shape
 
     # Compute lead_times and time_diffs in actual time units
-    lead_times = t_out_times.unsqueeze(1)  # Shape: [num_samples * num_pairs, 1]
-    time_diffs = (t_out_times - t_in_times).unsqueeze(1)  # Shape: [num_samples * num_pairs, 1]
+    lead_times = t_out_times[:, np.newaxis]  # Shape: [num_samples * num_pairs, 1]
+    time_diffs = (t_out_times - t_in_times)[:, np.newaxis]  # Shape: [num_samples * num_pairs, 1]
 
     if c_data is not None:
         c_in = c_data[sample_indices, t_in_indices_expanded, :, :]  # Shape: [num_samples * num_pairs, num_nodes, num_c_vars]
