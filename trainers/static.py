@@ -85,8 +85,9 @@ class StaticTrainer(TrainerBase):
         
         active_vars = self.metadata.active_variables
         u_tensor = u_tensor[..., active_vars]
-        num_input_channels = u_tensor.shape[-1]
-        assert self.model_config["args"]["in_channels"] == num_input_channels, f"Expected {num_input_channels} input channels, but found {self.model_config['args']['in_channels']}."
+        self.num_input_channels = c_tensor.shape[-1]
+        self.num_output_channels = u_tensor.shape[-1]
+        #assert self.model_config["args"]["in_channels"] == num_input_channels, f"Expected {num_input_channels} input channels, but found {self.model_config['args']['in_channels']}."
 
         total_samples = u_tensor.shape[0]
         train_size, val_size, test_size = dataset_config["train_size"], dataset_config["val_size"], dataset_config["test_size"]
@@ -109,7 +110,8 @@ class StaticTrainer(TrainerBase):
         self.latent_queries = torch.stack(meshgrid, dim=-1).unsqueeze(0).to(self.device) # [1, 64, 64, 2]
 
     def init_model(self, model_config):
-        self.model = GINO(**model_config["args"])
+        breakpoint()
+        self.model = GINO(in_channels=self.num_input_channels, out_channels=self.num_output_channels, **model_config["args"])
     
     def test(self):
         self.model.eval()

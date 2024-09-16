@@ -29,7 +29,7 @@ class DynamicTrainer(TrainerBase):
         # Load u
         u = ds[self.metadata.group_u].values  # Shape: [num_samples, num_timesteps, num_nodes, num_channels]
         u_tensor = torch.tensor(u, dtype=self.dtype)
-
+        breakpoint()
         # Load c if available
         if self.metadata.group_c is not None:
             c = ds[self.metadata.group_c].values  # Shape: [num_samples, num_timesteps, num_nodes, num_channels_c]
@@ -64,7 +64,6 @@ class DynamicTrainer(TrainerBase):
         test_size = dataset_config["test_size"]
 
         assert train_size + val_size + test_size <= u_tensor.shape[0], "Sum of train, val, and test sizes exceeds total samples"
-
         # Split data into train, val, test
         train_indices = np.arange(0, train_size)
         val_indices = np.arange(train_size, train_size + val_size)

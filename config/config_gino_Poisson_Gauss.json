@@ -13,8 +13,6 @@
     "model": {
         "name": "gino",
         "args": {
-            "in_channels": 1,
-            "out_channels": 1,
             "gno_coord_dim": 2,
             "projection_channels": 256,
             "in_gno_channel_mlp_hidden_layers": [64, 64, 64],
@@ -29,7 +27,7 @@
     "dataset": {
         "name": "Poisson-Gauss",
         "metaname": "rigno-unstructured/Poisson-Gauss",
-        "base_path": "../graph_pde_solver/dataset/",
+        "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
         "train_size": 2048,
         "val_size": 128,
         "test_size": 256,

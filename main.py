@@ -4,25 +4,9 @@ import pandas as pd
 import os
 import time
 import argparse
-# from Trainer import LongTermHeatTrainer,\
-#                     DataDriveLongTermHeatTrainer,\
-#                     PhyDataDriveHeatTrainer,\
-#                     PINNHeatTrainer,\
-#                     FDMHeatTrainer,\
-#                     LongTermWaveTrainer,\
-#                     DataDriveLongTermWaveTrainer,\
-#                     PhyDataDriveWaveTrainer,\
-#                     PINNWaveTrainer,\
-#                     FDMWaveTrainer, \
-#                     PoissonInverseTrainer, \
-#                     LongTermACTrainer, \
-#                     DataDriveLongTermACTrainer, \
-#                     PhyDataDriveACTrainer, \
-#                     PINNACTrainer, \
-#                     FDMACTrainer,\
-#                     PhyDataInverseWaveTrainer,\
-#                     TestPhyDataInverseWaveTrainer
+
 from trainers.static import StaticTrainer
+from trainers.dynamic import DynamicTrainer
 import toml 
 import json
 from multiprocessing import Pool,Process
@@ -228,7 +212,8 @@ def run_arg(arg):
     arg.datarow['time']    = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     arg.datarow['relative error (poseidon_metric)'] = np.nan
     Trainer = {
-        "static": StaticTrainer
+        "static": StaticTrainer,
+        "dynamic": DynamicTrainer
     }[arg.setup["trainer_name"]]
     t = Trainer(arg)
     if arg.setup["train"]:
@@ -243,8 +228,6 @@ def run_arg(arg):
             t.test()
 
 
-
-    
     if os.path.exists(arg.path["database_path"]):
         database = pd.read_csv(arg.path["database_path"])
     else:

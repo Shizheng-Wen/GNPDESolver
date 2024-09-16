@@ -24,9 +24,14 @@ class TrainerBase:
         self.path_config = self.config.path
         self.metadata = DATASET_METADATA[self.dataset_config["metaname"]]
 
-        self.device = args.device
-        manual_seed(args.seed)
-        self.dtype = self.setup_config["dtype"]
+        self.device = self.setup_config["device"]
+        manual_seed(self.setup_config["seed"])
+        if self.setup_config["dtype"] == "float":
+            self.dtype = torch.float32
+        elif self.setup_config['dtype'] == "dobule":
+            self.dtype = torch.float64
+        else:
+            raise 
         self.loss_fn = nn.MSELoss()
         
         self.init_dataset(self.dataset_config)

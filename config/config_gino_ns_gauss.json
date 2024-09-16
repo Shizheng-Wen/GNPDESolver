@@ -1,9 +1,9 @@
 {  
     "setup": {
         "seed": 42,
-        "device": "cuda:2",
-        "dtype": "torch.FloatTensor",
-        "trainer_name": "static",
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "trainer_name": "dynamic",
         "train": true,
         "test" : false,
         "ckpt": false,
@@ -25,10 +25,10 @@
     },
 
     "dataset": {
-        "name": "airfoil_li",
-        "metaname": "rigno-unstructured/airfoil_li",
+        "name": "NS-Gauss",
+        "metaname": "rigno-unstructured/NS-Gauss",
         "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
-        "train_size": 2048,
+        "train_size": 1024,
         "val_size": 128,
         "test_size": 256,
         "batch_size": 64,
@@ -45,19 +45,19 @@
             "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
-            "scheduler": "cosine",
-            "scheduler_step_size": 300,
-            "scheduler_gamma": 0.8,
-            "scheduler_T_max": 200,
+            "scheduler": "step",
+            "scheduler_step_size": 100,
+            "scheduler_gamma": 0.3,
+            "scheduler_T_max": 100,
             "scheduler_eta_min": 1e-4
         }
     },
 
     "path": {
-        "ckpt_path":".ckpt/gino/airfoil_li.pt",
-        "loss_path":".loss/gino/airfoil_li.png",
-        "result_path":".results/gino/airfoil_li.png",
-        "database_path":".database/gino/airfoil_li.csv"
+        "ckpt_path":".ckpt/gino/ns_gauss.pt",
+        "loss_path":".loss/gino/ns_gausspng",
+        "result_path":".results/gino/ns_gauss.png",
+        "database_path":".database/gino/ns_gauss.csv"
     }
 
     
