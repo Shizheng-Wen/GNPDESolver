@@ -1,0 +1,66 @@
+{  
+    "setup": {
+        "seed": 42,
+        "device": "cuda:1",
+        "dtype": "torch.float32",
+        "trainer_name": "dynamic",
+        "train": false,
+        "test" : true,
+        "ckpt": false,
+        "use_variance_test": false
+    },
+
+    "model": {
+        "name": "gino",
+        "args": {
+            "gno_coord_dim": 2,
+            "projection_channels": 256,
+            "in_gno_channel_mlp_hidden_layers": [64, 64, 64],
+            "out_gno_channel_mlp_hidden_layers": [64, 64],
+            "fno_in_channels": 64,
+            "fno_n_modes": [16, 16],
+            "lifting_channels": 256,
+            "fno_n_layers": 3
+        }
+    },
+
+    "dataset": {
+        "name": "heat_l_sines",
+        "metaname": "rigno-unstructured/heat_l_sines",
+        "base_path": "../graph_pde_solver/dataset",
+        "train_size": 1024,
+        "val_size": 128,
+        "test_size": 256,
+        "max_time_diff": 14,
+        "batch_size": 64,
+        "num_workers": 4,
+        "shuffle": true,
+        "latent_queries": [64, 64]
+    },
+
+    "optimizer": {
+        "name": "adam",
+        "args": {
+            "lr": 2e-2,
+            "epoch": 4,
+            "loss_scale": 1.0,
+            "eval_every_eps": 2,
+            "scheduler": "step",
+            "scheduler_step_size": 100,
+            "scheduler_gamma": 0.3,
+            "scheduler_T_max": 100,
+            "scheduler_eta_min": 1e-4
+        }
+    },
+
+    "path": {
+        "ckpt_path":".ckpt/gino/heat_l_sines.pt",
+        "loss_path":".loss/gino/heat_l_sines.png",
+        "result_path":".results/gino/heat_l_sines.png",
+        "database_path":".database/gino/heat_l_sines.csv"
+    }
+
+    
+}
+
+

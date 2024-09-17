@@ -19,7 +19,6 @@ class AdamOptimizer:
     def __init__(self, params, config):
         self.optimizer = torch.optim.Adam(params, lr=config["lr"])
         self.epoch = config["epoch"]
-        self.batch_size = config["batch_size"]
         self.lr = config["lr"]
         self.loss_scale = config["loss_scale"]
         self.eval_every_eps = config["eval_every_eps"]
@@ -60,6 +59,7 @@ class AdamOptimizer:
             
             if self.scheduler is not None:
                 self.scheduler.step()
+        
             pbar.update(1)
 
             if (epoch + 1) % self.eval_every_eps == 0:
