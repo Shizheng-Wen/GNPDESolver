@@ -1,7 +1,7 @@
 {  
     "setup": {
         "seed": 42,
-        "device": "cuda:1",
+        "device": "cuda:0",
         "dtype": "torch.float32",
         "trainer_name": "dynamic",
         "train": true,
@@ -41,7 +41,7 @@
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 2e-2,
+            "lr": 1e-3,
             "epoch": 500,
             "batch_size": 32,
             "loss_scale": 1.0,

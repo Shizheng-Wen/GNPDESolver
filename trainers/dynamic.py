@@ -27,7 +27,9 @@ class DynamicTrainer(TrainerBase):
         base_path = dataset_config["base_path"]
         dataset_name = dataset_config['name']
         dataset_path = os.path.join(base_path, f"{dataset_name}.nc")
-        self.poseidon_dataset_name = ["CE-RP","CE-Gauss","NS-PwC","NS-SVS","NS-Gauss","NS-SL"]
+        self.poseidon_dataset_name = ["CE-RP","CE-Gauss",
+                                      "NS-PwC","NS-SVS","NS-Gauss","NS-SL",
+                                       "ACE", "Wave-Layer"]
 
         with xr.open_dataset(dataset_path) as ds:
             # Load u as NumPy array
@@ -168,7 +170,6 @@ class DynamicTrainer(TrainerBase):
         self.model = GINO(in_channels=in_channels, out_channels=out_channels, **model_config["args"])
 
     def train_step(self, batch):
-
         batch_inputs, batch_outputs = batch
         batch_inputs, batch_outputs = batch_inputs.to(self.device), batch_outputs.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
         pred = self.model(x=batch_inputs, input_geom=self.x_train[0], latent_queries=self.latent_queries, output_queries=self.x_train[0][0])

@@ -110,7 +110,6 @@ class StaticTrainer(TrainerBase):
         self.latent_queries = torch.stack(meshgrid, dim=-1).unsqueeze(0).to(self.device) # [1, 64, 64, 2]
 
     def init_model(self, model_config):
-        breakpoint()
         self.model = GINO(in_channels=self.num_input_channels, out_channels=self.num_output_channels, **model_config["args"])
     
     def test(self):

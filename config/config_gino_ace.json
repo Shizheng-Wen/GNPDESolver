@@ -25,8 +25,8 @@
     },
 
     "dataset": {
-        "name": "NS-Gauss",
-        "metaname": "rigno-unstructured/NS-Gauss",
+        "name": "ACE",
+        "metaname": "rigno-unstructured/ACE",
         "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
         "train_size": 1024,
         "val_size": 128,
@@ -43,7 +43,6 @@
         "args": {
             "lr": 1e-3,
             "epoch": 500,
-            "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
             "scheduler": "step",
@@ -55,10 +54,10 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/gino/ns_gauss.pt",
-        "loss_path":".loss/gino/ns_gauss.png",
-        "result_path":".results/gino/ns_gauss.png",
-        "database_path":".database/gino/ns_gauss.csv"
+        "ckpt_path":".ckpt/gino/wave_ace.pt",
+        "loss_path":".loss/gino/wave_ace.png",
+        "result_path":".results/gino/wave_ace.png",
+        "database_path":".database/gino/wave_ace.csv"
     }
 
     
