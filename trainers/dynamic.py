@@ -27,6 +27,7 @@ class DynamicTrainer(TrainerBase):
         base_path = dataset_config["base_path"]
         dataset_name = dataset_config['name']
         dataset_path = os.path.join(base_path, f"{dataset_name}.nc")
+        self.poseidon_dataset_name = ["CE-RP","CE-Gauss","NS-PwC","NS-SVS","NS-Gauss","NS-SL"]
 
         with xr.open_dataset(dataset_path) as ds:
             # Load u as NumPy array
@@ -52,6 +53,13 @@ class DynamicTrainer(TrainerBase):
                 x_grid = x_grid.reshape(-1, 2)  # [num_nodes, num_dims]
                 x_grid = x_grid[None, None, ...]  # Add sample and time dimensions
                 self.x_train = x_grid # store the x array for later use
+        
+        if dataset_name in self.poseidon_dataset_name:
+            u_array = u_array[:,:,:9216,:]
+            if c_array is not None:
+                c_array = c_array[:,:,:9216,:]
+            self.x_train = self.x_train[:,:,:9216,:]
+        
         self.x_train = torch.tensor(self.x_train, dtype=self.dtype).to(self.device)
         # Handle active variables
         active_vars = self.metadata.active_variables
