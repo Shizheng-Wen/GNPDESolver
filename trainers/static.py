@@ -51,8 +51,11 @@ class StaticTrainer(TrainerBase):
     
     def init_dataset(self, dataset_config):
         base_path = dataset_config["base_path"]
+        dataset_name = dataset_config["name"]
         dataset_path = os.path.join(base_path, f"{dataset_config['name']}.nc")
         ds = xr.open_dataset(dataset_path)
+
+        self.poseidon_dataset_name = ["Poisson-Gauss"]
 
         # Load dataset -> Shape [num_samples, num_timesteps, num_nodes, num_channels]
         u = ds[self.metadata.group_u].values
@@ -82,7 +85,13 @@ class StaticTrainer(TrainerBase):
             if c_tensor is not None:
                 c_tensor = c_tensor.reshape(c_tensor.shape[0], -1) # [num_samples, num_nodes]
                 c_tensor = c_tensor[:, None, :, None] # [num_samples, 1, num_nodes, 1]
-        brekpoint()
+        
+        if dataset_name in self.poseidon_dataset_name:
+            u_tensor = u_tensor[:,:,:9216,:]
+            if c_tensor is not None:
+                c_tensor = c_tensor[:,:,:9216,:]
+            x_tensor = x_tensor[:,:,:9216,:]
+        
         active_vars = self.metadata.active_variables
         u_tensor = u_tensor[..., active_vars]
         self.num_input_channels = c_tensor.shape[-1]

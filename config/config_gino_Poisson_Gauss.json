@@ -27,7 +27,7 @@
     "dataset": {
         "name": "Poisson-Gauss",
         "metaname": "rigno-unstructured/Poisson-Gauss",
-        "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
+        "base_path": "../graph_pde_solver/dataset",
         "train_size": 2048,
         "val_size": 128,
         "test_size": 256,
@@ -40,7 +40,7 @@
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 5e-2,
+            "lr": 2e-3,
             "epoch": 1000,
             "batch_size": 32,
             "loss_scale": 1.0,

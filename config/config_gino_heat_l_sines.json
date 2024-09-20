@@ -1,11 +1,11 @@
 {  
     "setup": {
         "seed": 42,
-        "device": "cuda:0",
+        "device": "cuda:3",
         "dtype": "torch.float32",
         "trainer_name": "dynamic",
-        "train": true,
-        "test" : false,
+        "train": false,
+        "test" : true,
         "ckpt": false,
         "use_variance_test": false
     },
@@ -27,7 +27,7 @@
     "dataset": {
         "name": "heat_l_sines",
         "metaname": "rigno-unstructured/heat_l_sines",
-        "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
+        "base_path": "../graph_pde_solver/dataset",
         "train_size": 1024,
         "val_size": 128,
         "test_size": 256,

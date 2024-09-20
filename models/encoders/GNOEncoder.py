@@ -144,7 +144,7 @@ class IntegralTransform(nn.Module):
 
         if x is None:
             x = y
-
+        
         rep_features = y[neighbors["neighbors_index"]]
 
         # batching only matters if f_y (latent embedding) values are provided

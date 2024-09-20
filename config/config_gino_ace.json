@@ -1,4 +1,4 @@
-{  
+er{  
     "setup": {
         "seed": 42,
         "device": "cuda:0",

@@ -38,8 +38,6 @@ def compute_batch_errors(gtr: torch.Tensor, prd: torch.Tensor, metadata: Metadat
     error_sum = torch.sum(abs_error, dim=(1, 2))  # Shape: [batch_size, var]
 
     # sum errors per variable chunk
-    # chunks = torch.tensor(metadata.chunked_variables, device = gtr.device, dtype = torch.long) # Shape: [var]
-    # num_chunks = metadata.num_variable_chunks
     chunks_expanded = chunks.unsqueeze(0).expand(error_sum.size(0), -1)  # Shape: [batch_size, var]
     error_per_chunk = torch.zeros(error_sum.size(0), num_chunks, device=gtr.device, dtype=error_sum.dtype)
     error_per_chunk.scatter_add_(1, chunks_expanded, error_sum)
@@ -64,10 +62,10 @@ def compute_final_metric(all_relative_errors: torch.Tensor) -> float:
     Returns:
         Metrics: An object containing the final relative L1 median error
     """
-    # Step 3: Compute the median over the sample axis for each chunk
+    # Compute the median over the sample axis for each chunk
     median_error_per_chunk = torch.median(all_relative_errors, dim=0)[0]  # Shape: [num_chunks]
 
-    # Step 4: Take the mean of the median errors across all chunks
+    # Take the mean of the median errors across all chunks
     final_metric = torch.mean(median_error_per_chunk)
     
     return final_metric.item()
