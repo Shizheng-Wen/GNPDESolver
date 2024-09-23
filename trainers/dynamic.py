@@ -260,8 +260,11 @@ class DynamicTrainer(TrainerBase):
         self.model.eval()
         self.model.to(self.device)
         all_relative_errors = []
-        time_indices = np.arange(0, 15, 2) # [0, 2, 4, ..., 14]
-
+        if self.dataset_config["predict_mode"] == "autoregressive":
+            time_indices = np.arange(0, 15, 2) # [0, 2, 4, ..., 14]
+        elif self.dataset_config["predict_mode"] == "direct":
+            time_indices = np.array([0,14])
+        
         test_dataset = TestDataset(
             u_data = self.test_dataset.u_data,
             c_data = self.test_dataset.c_data,
@@ -286,8 +289,10 @@ class DynamicTrainer(TrainerBase):
                 pred = self.autoregressive_predict(x_batch, time_indices) # Shape: [batch_size, num_timesteps - 1, num_nodes, num_channels]
                 pred_de_norm = pred * self.u_std.to(self.device) + self.u_mean.to(self.device)
                 y_batch_de_norm = y_batch * self.u_std.to(self.device) + self.u_mean.to(self.device)
-
-                relative_errors = compute_batch_errors(y_batch_de_norm, pred_de_norm, self.metadata)
+                if self.dataset_config["metric"] == "final_step":
+                    relative_errors = compute_batch_errors(y_batch_de_norm[:,-2:-1,:,:], pred_de_norm[:,-2:-1,:,:], self.metadata)
+                elif self.dataset_config["metric"] == "all_step":
+                    relative_errors = compute_batch_errors(y_batch_de_norm, pred_de_norm, self.metadata)
                 all_relative_errors.append(relative_errors)
                 pbar.update(1)
         pbar.close()

@@ -4,8 +4,8 @@
         "device": "cuda:0",
         "dtype": "torch.float32",
         "trainer_name": "dynamic",
-        "train": true,
-        "test" : false,
+        "train": false,
+        "test" : true,
         "ckpt": false,
         "use_variance_test": false
     },
@@ -35,7 +35,9 @@
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
-        "latent_queries": [64, 64]
+        "latent_queries": [64, 64],
+        "metric": "all_step",
+        "predict_mode": "direct"
     },
 
     "optimizer": {
