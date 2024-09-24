@@ -6,7 +6,7 @@ import time
 import argparse
 
 from trainers.static import StaticTrainer
-from trainers.dynamic import DynamicTrainer
+from trainers.dynamic import DynamicTrainer, RIGNOTrainer
 import toml 
 import json
 from multiprocessing import Pool,Process
@@ -213,7 +213,8 @@ def run_arg(arg):
     arg.datarow['relative error (poseidon_metric)'] = np.nan
     Trainer = {
         "static": StaticTrainer,
-        "dynamic": DynamicTrainer
+        "dynamic": DynamicTrainer,
+        "rigno": RIGNOTrainer,
     }[arg.setup["trainer_name"]]
     t = Trainer(arg)
     if arg.setup["train"]:

@@ -10,6 +10,11 @@ from .utils import manual_seed, create_all_to_all_pairs, DynamicPairDataset_half
 from architectures.gino import GINO
 from data.dataset import Metadata, DATASET_METADATA
 
+from architectures.rigno.model import RIGNO
+from architectures.rigno.graph import RegionInteractionGraph
+
+
+
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 
@@ -372,5 +377,117 @@ class DynamicTrainer(TrainerBase):
         plt.tight_layout()
         plt.savefig(self.path_config["result_path"])
         plt.close()
+
+class RIGNOTrainer(DynamicTrainer):
+    def init_model(self, model_config):
+        in_channels = self.u_mean.shape[0] + 2
+
+        if hasattr(self, 'c_mean'):
+            in_channels += self.c_mean.shape[0]
+
+        out_channels = self.u_mean.shape[0]
+        breakpoint()
+        self.rigraph = RegionInteractionGraph.from_point_cloud(self.x_train[0][0],
+                                                          output_points=None,
+                                                          periodic=False,
+                                                          sample_factor=model_config["args"]["sample_factor"],
+                                                          overlap_factor_p2r=model_config["args"]["overlap_factor_p2r"],
+                                                          overlap_factor_r2p=model_config["args"]["overlap_factor_r2p"],
+                                                          regional_level=model_config["args"]["regional_level"],
+                                                          )
+        self.model = RIGNO(
+            node_input_size=self.rigraph.physical_to_regional.ndim[0] + in_channels, # +1 for time
+            edge_encoder_input_size=self.rigraph.physical_to_regional.edim,
+            edge_processor_input_size=self.rigraph.regional_to_regional.edim,
+            edge_decoder_input_size=self.rigraph.regional_to_physical.edim,
+            output_size=out_channels,
+        )
+
+    def train_step(self, batch):
+        batch_inputs, batch_outputs = batch
+        batch_inputs, batch_outputs = batch_inputs.to(self.device), batch_outputs.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
+        pred = self.model(self.rigraph, batch_inputs)
+        return self.loss_fn(pred, batch_outputs)
+    
+    def validate(self, loader):
+        self.model.eval()
+        total_loss = 0.0
+        with torch.no_grad():
+            for x_batch, y_batch in loader:
+                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
+                pred = self.model(self.rigraph, x_batch)
+                loss = self.loss_fn(pred, y_batch)
+                total_loss += loss.item()
+        return total_loss / len(loader)
+
+    def autoregressive_predict(self, x_batch, time_indices):
+        """
+        Autoregressive prediction of the output variables at the specified time indices.
+
+        Args:
+            x_batch (torch.Tensor): Initial input batch at time t=0. Shape: [batch_size, num_nodes, input_dim]
+            time_indices (np.ndarray): Array of time indices for prediction (e.g., [0, 2, 4, ..., 14])
+
+        Returns:
+            torch.Tensor: Predicted outputs over time. Shape: [batch_size, num_timesteps - 1, num_nodes, output_dim]
+        """
+        
+        batch_size, num_nodes, input_dim = x_batch.shape
+        num_timesteps = len(time_indices)
+
+        predictions = []
+
+        t_values = self.test_dataset.t_values
+        start_times_mean = self.time_stats['start_times_mean']
+        start_times_std = self.time_stats['start_times_std']
+        time_diffs_mean = self.time_stats['time_diffs_mean']
+        time_diffs_std = self.time_stats['time_diffs_std']
+
+        u_in_dim = self.u_mean.shape[0]
+        c_in_dim = self.c_mean.shape[0] if hasattr(self, 'c_mean') else 0
+        time_feature_dim = 2
+
+        if c_in_dim > 0:
+            c_in = x_batch[..., u_in_dim:u_in_dim+c_in_dim] # Shape: [batch_size, num_nodes, c_in_dim]
+        else:
+            c_in = None
+        
+        current_u_in = x_batch[..., :u_in_dim] # Shape: [batch_size, num_nodes, u_in_dim]
+        
+        for idx in range(1, num_timesteps):
+            t_in_idx = time_indices[idx-1]
+            t_out_idx = time_indices[idx]
+            start_time = t_values[t_in_idx]
+            time_diff = t_values[t_out_idx] - t_values[t_in_idx]
+            
+            start_time_norm = (start_time - start_times_mean) / start_times_std
+            time_diff_norm = (time_diff - time_diffs_mean) / time_diffs_std
+
+            # Prepare time features (expanded to match num_nodes)
+            start_time_expanded = torch.full((batch_size, num_nodes, 1), start_time_norm, dtype=self.dtype).to(self.device)
+            time_diff_expanded = torch.full((batch_size, num_nodes, 1), time_diff_norm, dtype=self.dtype).to(self.device)
+
+            input_features = [current_u_in]  # Use the previous u_in (either initial or previous prediction)
+            if c_in is not None:
+                input_features.append(c_in)  # Use the same c_in as in x_batch (assumed constant over time)
+            input_features.append(start_time_expanded)
+            input_features.append(time_diff_expanded)
+            x_input = torch.cat(input_features, dim=-1)  # Shape: [batch_size, num_nodes, input_dim]
+
+            # Forward pass
+            with torch.no_grad():
+                pred = self.model(self.rigraph, x_input)
+                # pred shape: [batch_size, num_nodes, output_dim]
+
+            # Store prediction
+            predictions.append(pred)
+
+            # Update current_u_in for next iteration
+            current_u_in = pred
+        
+        predictions = torch.stack(predictions, dim=1) # Shape: [batch_size, num_timesteps - 1, num_nodes, output_dim]
+        
+        return predictions
+
 
         
