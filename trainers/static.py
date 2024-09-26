@@ -69,6 +69,8 @@ class StaticTrainer(TrainerBase):
 
         if self.metadata.group_x is not None:
             x = ds[self.metadata.group_x].values
+            if x.shape[0] != u.shape[0]:
+                x = np.broadcast_to(x, (u_tensor.shape[0], x.shape[1], x.shape[2], x.shape[3]))
             x_tensor = torch.tensor(x, dtype=torch.float32) # Shape [num_samples, num_timesteps, num_nodes, num_dims]
         else:
             # generate x coordinates if not available (e.g., for airfoil_grid) -> Shape [num_samples, num_nodes_x, num_nodes_y]
@@ -103,7 +105,7 @@ class StaticTrainer(TrainerBase):
         
         assert train_size + val_size + test_size <= total_samples, "Sum of train, val, and test sizes exceeds total samples"
         assert u_tensor.shape[1] == 1, "Expected num_timesteps to be 1 for static datasets."
-
+        
         train_ds = TensorDataset(c_tensor[:train_size], u_tensor[:train_size], x_tensor[:train_size])
         val_ds = TensorDataset(c_tensor[train_size:train_size+val_size], u_tensor[train_size:train_size+val_size], x_tensor[train_size:train_size+val_size])
         test_ds = TensorDataset(c_tensor[-test_size:], u_tensor[-test_size:], x_tensor[-test_size:])
@@ -158,7 +160,47 @@ class StaticTrainer(TrainerBase):
         plt.savefig(self.path_config["result_path"])
         plt.close()
         
-        
+    def measure_inference_time(self):
+        self.model.eval()
+        self.model.to(self.device)
+        with torch.no_grad():
+            # Get a single sample from the test dataset
+            x_sample, y_sample, coord_sample = self.test_loader.dataset[0]
+            # Ensure inputs are tensors and add batch dimension
+            x_sample = x_sample.to(self.device).unsqueeze(0)  # Shape: [1, num_timesteps, num_nodes, num_channels]
+            coord_sample = coord_sample.to(self.device).unsqueeze(0)  # Shape: [1, num_timesteps, num_nodes, num_dims]
+            # Since it's a static problem, squeeze the time dimension
+            x_input = x_sample.squeeze(1)  # Shape: [1, num_nodes, num_channels]
+            coord_input = coord_sample.squeeze(1)  # Shape: [1, num_nodes, num_dims]
+            # Prepare input_geom and output_queries
+            input_geom = coord_input[0:1]  # Shape: [1, num_nodes, num_dims]
+            output_queries = coord_input[0]  # Shape: [num_nodes, num_dims]
+            # Warm-up run
+            _ = self.model(
+                x=x_input,
+                input_geom=input_geom,
+                latent_queries=self.latent_queries,
+                output_queries=output_queries
+            )
+            # Measure inference time over 10 runs
+            times = []
+            for _ in range(10):
+                start_time = time.perf_counter()
+                pred = self.model(
+                    x=x_input,
+                    input_geom=input_geom,
+                    latent_queries=self.latent_queries,
+                    output_queries=output_queries
+                )
+                # Ensure all CUDA kernels have finished before stopping the timer
+                if 'cuda' in str(self.device):
+                    torch.cuda.synchronize()
+                end_time = time.perf_counter()
+                times.append(end_time - start_time)
+            avg_time = sum(times) / len(times)
+            print(f"Average inference time over 10 runs (batch size = 1): {avg_time:.6f} seconds")
+                
+
 
 
         

@@ -2,8 +2,8 @@
     "setup": {
         "seed": 42,
         "device": "cuda:0",
-        "dtype": "torch.FloatTensor",
-        "trainer_name": "static",
+        "dtype": "torch.float32",
+        "trainer_name": "dynamic",
         "train": false,
         "test" : true,
         "ckpt": false,
@@ -20,44 +20,48 @@
             "fno_in_channels": 64,
             "fno_n_modes": [16, 16],
             "lifting_channels": 256,
-            "fno_n_layers": 3
+            "fno_n_layers": 3,
+            "gno_radius": 0.066
         }
     },
 
     "dataset": {
-        "name": "poisson_c_sines",
-        "metaname": "rigno-unstructured/poisson_c_sines",
-        "base_path": "../graph_pde_solver/dataset",
-        "train_size": 2048,
+        "name": "CE-Gauss",
+        "metaname": "rigno-unstructured/CE-Gauss",
+        "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
+        "train_size": 1024,
         "val_size": 128,
         "test_size": 256,
-        "batch_size": 64,
+        "max_time_diff": 14,
+        "batch_size": 32,
         "num_workers": 4,
         "shuffle": true,
-        "latent_queries": [64, 64]
+        "latent_queries": [64, 64],
+        "metric": "all_step",
+        "predict_mode": "direct"
     },
 
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 2e-2,
-            "epoch": 1000,
+            "lr": 1e-3,
+            "epoch": 500,
             "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
             "scheduler": "step",
             "scheduler_step_size": 100,
-            "scheduler_gamma": 0.3,
+            "scheduler_gamma": 0.8,
             "scheduler_T_max": 100,
             "scheduler_eta_min": 1e-4
         }
     },
 
     "path": {
-        "ckpt_path":".ckpt/gino/poisson_c_sines.pt",
-        "loss_path":".loss/gino/poisson_c_sines.png",
-        "result_path":".results/gino/poisson_c_sines.png",
-        "database_path":".database/gino/poisson_c_sines.csv"
+        "ckpt_path":".ckpt/gino/ce_gauss_re.pt",
+        "loss_path":".loss/gino/ce_gauss_re.png",
+        "result_path":".results/gino/ce_gauss_re.png",
+        "database_path":".database/gino/ce_gauss_re.csv"
     }
 
     

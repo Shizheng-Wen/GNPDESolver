@@ -10,8 +10,8 @@ from .utils import manual_seed, create_all_to_all_pairs, DynamicPairDataset_half
 from architectures.gino import GINO
 from data.dataset import Metadata, DATASET_METADATA
 
-from architectures.rigno.model import RIGNO
-from architectures.rigno.graph import RegionInteractionGraph
+#from architectures.rigno.model import RIGNO
+#from architectures.rigno.graph import RegionInteractionGraph, add_dummy, remove_dummy
 
 
 
@@ -312,10 +312,10 @@ class DynamicTrainer(TrainerBase):
             t_values=self.test_dataset.t_values,
             num_frames=5
         )
-        
+
     def plot_results(self, coords, gt_sequence, pred_sequence, time_indices, t_values, num_frames=5):
         """
-        Plots several frames of ground truth and predicted results using contour plots.
+        Plots several frames of ground truth and predicted results using contour plots for all variables.
 
         Args:
             coords (numpy.ndarray): Coordinates of the nodes. Shape: [num_nodes, num_dims]
@@ -328,55 +328,110 @@ class DynamicTrainer(TrainerBase):
         num_timesteps = gt_sequence.shape[0]
         num_nodes = coords.shape[0]
         num_vars = gt_sequence.shape[-1]
-        
+
         # Select frames to plot
         frame_indices = np.linspace(0, num_timesteps - 1, num_frames, dtype=int)
-        
+
         x = coords[:, 0]
         y = coords[:, 1]
-        
-        # Create a figure with 3 rows and num_frames columns
-        fig, axes = plt.subplots(3, num_frames, figsize=(4 * num_frames, 12))
-        
-        vmin = min(gt_sequence.min(), pred_sequence.min())
-        vmax = max(gt_sequence.max(), pred_sequence.max())
-        
-        for i, frame_idx in enumerate(frame_indices):
-            time_idx = time_indices[frame_idx + 1]  # +1 because gt_sequence and pred_sequence start from time_indices[1:]
-            time_value = t_values[time_idx]
-            
-            gt = gt_sequence[frame_idx][:, 0]  # Assuming single variable
-            pred = pred_sequence[frame_idx][:, 0]
-            abs_error = np.abs(gt - pred)
-            
-            # Ground Truth
-            ax_gt = axes[0, i]
-            ct_gt = ax_gt.tricontourf(x, y, gt, cmap='plasma')
-            ax_gt.set_title(f"Time: {time_value:.2f}")
-            if i == 0:
-                ax_gt.set_ylabel('Ground Truth')
-            ax_gt.set_aspect('equal')
-            plt.colorbar(ct_gt, ax=ax_gt)
-            
-            # Prediction
-            ax_pred = axes[1, i]
-            ct_pred = ax_pred.tricontourf(x, y, pred, cmap='plasma')
-            if i == 0:
-                ax_pred.set_ylabel('Prediction')
-            ax_pred.set_aspect('equal')
-            plt.colorbar(ct_pred, ax=ax_pred)
-            
-            # Absolute Error
-            ax_error = axes[2, i]
-            ct_error = ax_error.tricontourf(x, y, abs_error, cmap='plasma')
-            if i == 0:
-                ax_error.set_ylabel('Absolute Error')
-            ax_error.set_aspect('equal')
-            plt.colorbar(ct_error, ax=ax_error)
-            
+
+        # Create a figure with num_vars * 3 rows and num_frames columns
+        fig_height = 3 * num_vars * 4
+        fig, axes = plt.subplots(num_vars * 3, num_frames, figsize=(4 * num_frames, fig_height))
+
+        # Ensure axes is a 2D array
+        axes = np.array(axes)
+        if axes.ndim == 1:
+            axes = axes.reshape((num_vars * 3, num_frames))
+
+        # Compute vmin and vmax per variable
+        vmin_list = []
+        vmax_list = []
+        for variable_idx in range(num_vars):
+            min_val = min(gt_sequence[:, :, variable_idx].min(), pred_sequence[:, :, variable_idx].min())
+            max_val = max(gt_sequence[:, :, variable_idx].max(), pred_sequence[:, :, variable_idx].max())
+            vmin_list.append(min_val)
+            vmax_list.append(max_val)
+
+        for variable_idx in range(num_vars):
+            vmin = vmin_list[variable_idx]
+            vmax = vmax_list[variable_idx]
+            for i, frame_idx in enumerate(frame_indices):
+                time_idx = time_indices[frame_idx + 1]  # +1 because gt_sequence and pred_sequence start from time_indices[1:]
+                time_value = t_values[time_idx]
+
+                gt = gt_sequence[frame_idx][:, variable_idx]
+                pred = pred_sequence[frame_idx][:, variable_idx]
+                abs_error = np.abs(gt - pred)
+
+                # Row indices
+                row_gt = variable_idx * 3
+                row_pred = variable_idx * 3 + 1
+                row_error = variable_idx * 3 + 2
+
+                # Ground Truth
+                ax_gt = axes[row_gt, i]
+                ct_gt = ax_gt.tricontourf(x, y, gt, cmap='RdBu', vmin=vmin, vmax=vmax)
+                if i == 0:
+                    ax_gt.set_ylabel(f'Variable {variable_idx + 1} - Ground Truth')
+                if variable_idx == 0:
+                    ax_gt.set_title(f"Time: {time_value:.2f}")
+                ax_gt.set_aspect('equal')
+                plt.colorbar(ct_gt, ax=ax_gt)
+
+                # Prediction
+                ax_pred = axes[row_pred, i]
+                ct_pred = ax_pred.tricontourf(x, y, pred, cmap='RdBu', vmin=vmin, vmax=vmax)
+                if i == 0:
+                    ax_pred.set_ylabel('Prediction')
+                ax_pred.set_aspect('equal')
+                plt.colorbar(ct_pred, ax=ax_pred)
+
+                # Absolute Error
+                ax_error = axes[row_error, i]
+                ct_error = ax_error.tricontourf(x, y, abs_error, cmap='hot')
+                if i == 0:
+                    ax_error.set_ylabel('Absolute Error')
+                ax_error.set_aspect('equal')
+                plt.colorbar(ct_error, ax=ax_error)
+
         plt.tight_layout()
         plt.savefig(self.path_config["result_path"])
         plt.close()
+
+    def measure_inference_time(self):
+        import time
+        self.model.eval()
+        self.model.to(self.device)
+        with torch.no_grad():
+            # Get a single sample from the test dataset
+            x_sample, y_sample = self.test_dataset[0]
+            # Ensure inputs are tensors and add batch dimension
+            x_sample = torch.tensor(x_sample, dtype=self.dtype).unsqueeze(0).to(self.device)  # Shape: [1, num_nodes, input_dim]
+            # Warm-up run
+            _ = self.model(
+                x=x_sample,
+                input_geom=self.x_train[0],
+                latent_queries=self.latent_queries,
+                output_queries=self.x_train[0][0]
+            )
+            # Measure inference time over 10 runs
+            times = []
+            for _ in range(10):
+                start_time = time.perf_counter()
+                pred = self.model(
+                    x=x_sample,
+                    input_geom=self.x_train[0],
+                    latent_queries=self.latent_queries,
+                    output_queries=self.x_train[0][0]
+                )
+                # Ensure all CUDA kernels have finished before stopping the timer
+                if 'cuda' in str(self.device):
+                    torch.cuda.synchronize()
+                end_time = time.perf_counter()
+                times.append(end_time - start_time)
+            avg_time = sum(times) / len(times)
+            print(f"Average inference time over 10 runs (batch size = 1): {avg_time:.6f} seconds")
 
 class RIGNOTrainer(DynamicTrainer):
     def init_model(self, model_config):
@@ -386,7 +441,6 @@ class RIGNOTrainer(DynamicTrainer):
             in_channels += self.c_mean.shape[0]
 
         out_channels = self.u_mean.shape[0]
-        breakpoint()
         self.rigraph = RegionInteractionGraph.from_point_cloud(self.x_train[0][0],
                                                           output_points=None,
                                                           periodic=False,
@@ -406,7 +460,7 @@ class RIGNOTrainer(DynamicTrainer):
     def train_step(self, batch):
         batch_inputs, batch_outputs = batch
         batch_inputs, batch_outputs = batch_inputs.to(self.device), batch_outputs.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
-        pred = self.model(self.rigraph, batch_inputs)
+        pred = self.model(self.rigraph, add_dummy(batch_inputs[0]))
         return self.loss_fn(pred, batch_outputs)
     
     def validate(self, loader):

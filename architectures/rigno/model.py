@@ -11,11 +11,6 @@ def shallow_asdict(obj:Any)->dict:
         return {f.name: getattr(obj, f.name) for f in fields(obj)}
     return obj
 
-
-
-
-
-
 def activation_fn(name:str, activation_kwargs:dict = dict())->nn.Module:
     if name == "swish":
         return nn.SiLU()
@@ -52,10 +47,20 @@ class MLP(nn.Module):
             x = self.act(x)
         x = self.layers[-1](x)
         return x
-        
-    pass
 
 class ConditionedNorm(nn.Module):
+    """
+    Used for time-conditioned Layer Normalization.
+
+    Parameters
+    ----------
+    input_size:int
+        The size of the input tensor
+    output_size:int 
+        The size of the output tensor
+    hidden_size:int
+        The size of the hidden layer
+    """
     def __init__(self,
                  input_size:int,
                  output_size:int,
@@ -78,6 +83,17 @@ class ConditionedNorm(nn.Module):
         for layer in self.mlp_bias.layers:
             nn.init.normal_(layer.weight, std=0.01)
     def forward(self, c, x):
+        """
+        For time-conditioned Layer Normalization, the c is often scalar time difference $\tau$,
+        x is a tensor. The output of the mlp_scale and mlp_bias are a vector which have the same size as x.
+
+        Parameters
+        ----------
+        c:torch.Tensor
+            The conditional input, often time. 
+        x:torch.Tensor
+            The input tensor
+        """
         scale = 1 + c * self.mlp_scale(c)
         bias = c * self.mlp_bias(c)
         x    = x * scale + bias 
@@ -99,6 +115,30 @@ class AugmentedMLP(nn.Module):
     input_size:int 
     output_size:int
     hidden_size:int
+    """
+    This is a simple MLP with layer normalization and conditional normalization.
+
+    Parameters
+    ----------
+    input_size:int
+        The size of the input tensor
+    output_size:int
+        The size of the output tensor 
+    hidden_size:int
+        The size of the hidden layer
+    num_layers:int
+        The number of layers
+    activation:str
+        The activation function
+    use_layer_norm:bool
+        Whether to use layer normalization. Default to True  
+    use_conditional_norm:bool
+        Whether to use conditional normalization. Default to False. Note that if True, 
+        the conditional input should be provided and the correction should be provided. 
+        use_layer_norm should be False.
+    cond_norm_hidden_size:int
+        The size of the hidden layer for conditional normalization. Default to 4
+    """
 
     def __init__(self, 
                  input_size:int,
@@ -750,11 +790,12 @@ class RIGNO(nn.Module):
 
         graph:Graph = graphs.physical_to_regional
         graph       = graph.drop_edge(self.drop_edge)
-
+        
         pndata      = torch.cat([graph.get_ndata()[0], pndata], -1) if pndata is not None else graph.get_ndata()[0] 
         rndata      = graph.get_ndata()[1] 
         ndata       = (pndata, rndata)
         edata       = graph.get_edata()
+        breakpoint()
         ndata, _ = self.encoder(graph,
                                     ndata,
                                     edata,
