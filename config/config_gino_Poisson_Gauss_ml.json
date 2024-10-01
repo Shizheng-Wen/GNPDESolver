@@ -1,12 +1,12 @@
 {  
     "setup": {
         "seed": 42,
-        "device": "cuda:1",
+        "device": "cuda:0",
         "dtype": "torch.FloatTensor",
         "trainer_name": "static",
-        "train": false,
-        "test" : true,
-        "ckpt": false,
+        "train": true,
+        "test" : false,
+        "ckpt": true,
         "use_variance_test": false
     },
 
@@ -20,14 +20,13 @@
             "fno_in_channels": 64,
             "fno_n_modes": [16, 16],
             "lifting_channels": 256,
-            "fno_n_layers": 3,
-            "gno_radius": 0.066
+            "fno_n_layers": 3
         }
     },
 
     "dataset": {
-        "name": "poisson_c_sines",
-        "metaname": "rigno-unstructured/poisson_c_sines",
+        "name": "Poisson-Gauss",
+        "metaname": "rigno-unstructured/Poisson-Gauss",
         "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
         "train_size": 2048,
         "val_size": 128,
@@ -35,30 +34,30 @@
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
-        "latent_queries": [64, 64]
+        "latent_queries": [96, 96]
     },
 
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 2e-2,
+            "lr": 1.1e-4,
             "epoch": 1000,
             "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
             "scheduler": "step",
             "scheduler_step_size": 100,
-            "scheduler_gamma": 0.3,
+            "scheduler_gamma": 0.8,
             "scheduler_T_max": 100,
             "scheduler_eta_min": 1e-4
         }
     },
 
     "path": {
-        "ckpt_path":".ckpt/gino/poisson_c_sines.pt",
-        "loss_path":".loss/gino/poisson_c_sines.png",
-        "result_path":".results/gino/poisson_c_sines.png",
-        "database_path":".database/gino/poisson_c_sines.csv"
+        "ckpt_path":".ckpt/gino/Poisson-Gauss_ml.pt",
+        "loss_path":".loss/gino/Poisson-Gauss_ml.png",
+        "result_path":".results/gino/Poisson-Gauss_ml.png",
+        "database_path":".database/gino/Poisson-Gauss_ml.csv"
     }
 
     
