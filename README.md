@@ -5,8 +5,10 @@ Currently, it supports the following GNPDESolver:
 
 - [MeshGraphNet](https://sites.google.com/view/meshgraphnets)
 - [Geometry-Informed Neural Operator](https://openreview.net/pdf?id=86dXbqT5Ua)
+
 - [RIGNO](https://github.com/sprmsv/rigno)
 - [AIFS](https://arxiv.org/pdf/2406.01465)
+
 
 
 Folder structure:
