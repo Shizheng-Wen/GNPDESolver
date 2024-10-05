@@ -5,13 +5,15 @@ import os
 import time
 import argparse
 
-from trainers.static import StaticTrainer
-from trainers.dynamic import DynamicTrainer, RIGNOTrainer
 import toml 
 import json
+from omegaconf import OmegaConf
 from multiprocessing import Pool,Process
 import subprocess
 import platform
+
+from src.trainer.seq import SequentialTrainer
+from src.trainer.stat import StaticTrainer
 
 def parse_args(parser):
     # Trainer setup
@@ -144,10 +146,10 @@ class FileParser:
     def __init__(self, filename):
         if filename.endswith(".toml"):
             with open(filename) as f:
-                self.kwargs = toml.load(f)
+                self.kwargs = OmegaConf.load(f)
         elif filename.endswith(".json"):
             with open(filename) as f:
-                self.kwargs = json.load(f)
+                self.kwargs = OmegaConf.load(f)
         else:
             raise NotImplementedError(f"File type {filename} not supported, currently only toml and json are supported.")
         
@@ -203,18 +205,19 @@ def run_arg(arg):
             os.makedirs(_dirpath)
         # turn the relative path to abs path 
         arg.path[_path] = _abspath
-    
     arg.datarow = vars(arg).copy()
     arg.datarow['nbytes'] = -1
     arg.datarow['nparams'] = -1
+    arg.datarow['p2r edges'] = -1
+    arg.datarow['r2r edges'] = -1
+    arg.datarow['r2p edges'] = -1
     arg.datarow['training time'] = np.nan
     arg.datarow['inference time'] = np.nan
     arg.datarow['time']    = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     arg.datarow['relative error (poseidon_metric)'] = np.nan
     Trainer = {
-        "static": StaticTrainer,
-        "dynamic": DynamicTrainer,
-        "rigno": RIGNOTrainer,
+        "seq": SequentialTrainer,
+        "stat": StaticTrainer,
     }[arg.setup["trainer_name"]]
     t = Trainer(arg)
     if arg.setup["train"]:

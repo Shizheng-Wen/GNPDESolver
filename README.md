@@ -12,42 +12,46 @@ Currently, it supports the following GNPDESolver:
 Folder structure:
 ```
 GNPDESolver/
-├── models/
-│   ├── encoders/
-│   │   ├── MLPEncoder.py
-│   │   ├── FNOEncoder.py
-│   │   └── MessagePassingEncoder.py
-│   ├── processors/
-│   │   ├── MLPProcessor.py
-│   │   ├── FNOProcessor.py
-│   │   └── MessagePassingProcessor.py
-│   ├── decoders/
-│   │   ├── MLPDecoder.py
-│   │   ├── FNODecoder.py
-│   │   └── MessagePassingDecoder.py
-│   └── __init__.py
-├── architectures/
-│   ├── MeshGraphNet.py
-│   ├── GINO.py
-│   └── __init__.py
-├── trainers/
-│   ├── Trainer.py
-│   └── __init__.py
-├── data/
-│   ├── dataset1/
-│   ├── dataset2/
-│   └── __init__.py
-├── utils/
-│   ├── data_preprocessing.py
-│   ├── metrics.py
-│   └── __init__.py
+├── config/
+│   ├── gino/
+│   ├── rano/
+│   ├── rigno/
+│   └── temp.py
+├── src/
+│   ├── data/
+│   │   ├── dataset.py
+│   │   └── readme.md
+│   ├── graph/
+│   │   ├── __init__.py
+│   │   ├── domain.py
+│   │   ├── edges.py
+│   │   ├── encoder.py
+│   │   ├── graph.py
+│   │   ├── rigraph.py
+│   │   ├── support.py
+│   │   └── tri.py
+│   ├── trainer/
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   ├── cal_metric.py
+│   │   │   ├── data_pairs.py
+│   │   │   └── train_setup.py
+│   │   ├── base.py
+│   │   ├── optimizer.py
+│   │   ├── seq.py
+│   │   └── stat.py
+│   └──  utils/
+│       ├── __init__.py
+│       ├── buffer.py
+│       ├── dataclass.py
+│       ├── pair.py
+│       ├── rand.py
+│       ├── sample.py
+│       ├── scale.py
+│       └── viz.py
 ├── tests/
-│   ├── test_encoders.py
-│   ├── test_processors.py
-│   ├── test_decoders.py
-│   ├── test_architectures.py
-│   ├── test_trainers.py
-│   └── __init__.py
+├── viz/
 ├── main.py
+├── MODEL.md
 └── README.md
 ```

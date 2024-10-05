@@ -7,8 +7,6 @@
 
 .vscode/
 
-tests/test_model
-tests/dataset
 
 **__pycache__**
 
