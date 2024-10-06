@@ -18,7 +18,7 @@ from src.data.dataset import Metadata, DATASET_METADATA
 from src.graph import RegionInteractionGraph
 from src.model import init_model_from_rigraph
 
-
+EPSILON = 1e-10
 
 class StaticTrainer(TrainerBase):
     """
@@ -70,20 +70,66 @@ class StaticTrainer(TrainerBase):
         u_array = u_array[..., active_vars]
         self.num_input_channels = c_array.shape[-1]
         self.num_output_channels = u_array.shape[-1]
-        
-        #self.plot_results(torch.self.x_train[0][0], torch.tensor(c_array[0][0]), torch.tensor(u_array[0][0]), torch.tensor(u_array[0][0]))
-        #assert self.model_config["args"]["in_channels"] == num_input_channels, f"Expected {num_input_channels} input channels, but found {self.model_config['args']['in_channels']}."
- 
+
+        # Compute dataset sizes
         total_samples = u_array.shape[0]
-        train_size, val_size, test_size = dataset_config["train_size"], dataset_config["val_size"], dataset_config["test_size"]
-        
+        train_size = dataset_config["train_size"]
+        val_size = dataset_config["val_size"]
+        test_size = dataset_config["test_size"]
+
         assert train_size + val_size + test_size <= total_samples, "Sum of train, val, and test sizes exceeds total samples"
         assert u_array.shape[1] == 1, "Expected num_timesteps to be 1 for static datasets."
         
+        # Split data into train, val, test
+        u_train = u_array[:train_size]
+        u_val = u_array[train_size:train_size+val_size]
+        u_test = u_array[-test_size:]
+
+        if c_array is not None:
+            c_train = c_array[:train_size]
+            c_val = c_array[train_size:train_size+val_size]
+            c_test = c_array[-test_size:]
+        else:
+            c_train = c_val = c_test = None
+        
+        # Compute dataset statistics from training data
+        # Reshape u_train to [num_samples * num_timesteps * num_nodes, num_active_vars]
+        u_train_flat = u_train.reshape(-1, u_train.shape[-1])
+        u_mean = np.mean(u_train_flat, axis=0)
+        u_std = np.std(u_train_flat, axis=0) + EPSILON  # Avoid division by zero
+
+        # Store statistics as torch tensors
+        self.u_mean = torch.tensor(u_mean, dtype=self.dtype)
+        self.u_std = torch.tensor(u_std, dtype=self.dtype)
+
+        # # Normalize data using NumPy operations
+        # u_train = (u_train - u_mean) / u_std
+        # u_val = (u_val - u_mean) / u_std
+        # u_test = (u_test - u_mean) / u_std
+
+        # # If c is used, compute statistics and normalize c
+        # if c_array is not None:
+        #     c_train_flat = c_train.reshape(-1, c_train.shape[-1])
+        #     c_mean = np.mean(c_train_flat, axis=0)
+        #     c_std = np.std(c_train_flat, axis=0) + EPSILON  # Avoid division by zero
+
+        #     # Store statistics
+        #     self.c_mean = torch.tensor(c_mean, dtype=self.dtype)
+        #     self.c_std = torch.tensor(c_std, dtype=self.dtype)
+
+        #     # Normalize c
+        #     c_train = (c_train - c_mean) / c_std
+        #     c_val = (c_val - c_mean) / c_std
+        #     c_test = (c_test - c_mean) / c_std
+
         self.x_train = torch.tensor(self.x_train, dtype=self.dtype).to(self.device)
-        train_ds = TensorDataset(torch.tensor(c_array[:train_size], dtype=self.dtype), torch.tensor(u_array[:train_size], dtype=self.dtype))
-        val_ds = TensorDataset(torch.tensor(c_array[train_size:train_size+val_size], dtype=self.dtype), torch.tensor(u_array[train_size:train_size+val_size], dtype=self.dtype))
-        test_ds = TensorDataset(torch.tensor(c_array[-test_size:], dtype=self.dtype), torch.tensor(u_array[-test_size:], dtype=self.dtype))
+        
+        c_train, u_train = torch.tensor(c_train, dtype=self.dtype), torch.tensor(u_train, dtype=self.dtype)
+        c_val, u_val = torch.tensor(c_val, dtype=self.dtype), torch.tensor(u_val, dtype=self.dtype)
+        c_test, u_test = torch.tensor(c_test, dtype=self.dtype), torch.tensor(u_test, dtype=self.dtype)
+        train_ds = TensorDataset(c_train, u_train)
+        val_ds = TensorDataset(c_val, u_val)
+        test_ds = TensorDataset(c_test, u_test)
 
         self.train_loader = DataLoader(train_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
         self.val_loader = DataLoader(val_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])

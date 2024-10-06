@@ -1,5 +1,5 @@
 import torch
-from data.dataset import Metadata
+from ...data.dataset import Metadata
 
 EPSILON = 1e-10
 

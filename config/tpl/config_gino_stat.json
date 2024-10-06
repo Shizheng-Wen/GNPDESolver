@@ -1,9 +1,9 @@
 {  
     "setup": {
         "seed": 42,
-        "device": "cuda:0",
+        "device": "cuda:1",
         "dtype": "torch.float32",
-        "trainer_name": "seq",
+        "trainer_name": "static",
         "train": true,
         "test" : false,
         "ckpt": false,
@@ -34,49 +34,46 @@
             "fno_n_modes": [16, 16],
             "lifting_channels": 256,
             "fno_n_layers": 3,
-            "in_gno_transform_type": "linear",
-            "out_gno_transform_type": "linear",
+            "in_gno_transform_type": "nonlinear",
+            "out_gno_transform_type": "nonlinear",
             "gno_radius": 0.033
         }
     },
 
     "dataset": {
-        "name": "heat_l_sines",
-        "metaname": "rigno-unstructured/heat_l_sines",
+        "name": "elasticity",
+        "metaname": "rigno-unstructured/elasticity",
         "base_path": "../graph_pde_solver/dataset",
         "train_size": 1024,
         "val_size": 128,
         "test_size": 256,
-        "max_time_diff": 14,
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
-        "latent_queries": [64, 64],
-        "metric": "all_step",
-        "predict_mode": "autoregressive"
+        "latent_queries": [64, 64]
     },
 
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 1e-3,
-            "epoch": 6,
+            "lr": 2e-2,
+            "epoch": 1000,
             "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
             "scheduler": "step",
             "scheduler_step_size": 100,
-            "scheduler_gamma": 0.8,
+            "scheduler_gamma": 0.3,
             "scheduler_T_max": 100,
             "scheduler_eta_min": 1e-4
         }
     },
 
     "path": {
-        "ckpt_path":".ckpt/gino/test/heat_l_sines.pt",
-        "loss_path":".loss/gino/test/heat_l_sines.png",
-        "result_path":".results/gino/test/heat_l_sines.png",
-        "database_path":".database/gino/test/heat_l_sines.csv"
+        "ckpt_path":".ckpt/gino/test/elasticity.pt",
+        "loss_path":".loss/gino/test/elasticity.png",
+        "result_path":".results/gino/test/elasticity.png",
+        "database_path":".database/gino/test/elasticity.csv"
     }
 
 }

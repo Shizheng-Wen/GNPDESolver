@@ -1,5 +1,5 @@
 import numpy as np
-from data.dataset import Metadata
+from ...data.dataset import Metadata
 from torch.utils.data import Dataset
 import torch
 

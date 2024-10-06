@@ -3,7 +3,7 @@
         "seed": 42,
         "device": "cuda:1",
         "dtype": "torch.float32",
-        "trainer_name": "seq",
+        "trainer_name": "static",
         "train": true,
         "test" : false,
         "ckpt": false,
@@ -13,7 +13,7 @@
     "graph": {
         "periodic": false,
         "sample_factor": 0.5,
-        "overlap_factor_p2r": 1,
+        "overlap_factor_p2r": 2,
         "overlap_factor_r2p": 1,
         "regional_level": 1,
         "add_dummy_node": false,
@@ -80,19 +80,16 @@
     },
 
     "dataset": {
-        "name": "heat_l_sines",
-        "metaname": "rigno-unstructured/heat_l_sines",
+        "name": "elasticity",
+        "metaname": "rigno-unstructured/elasticity",
         "base_path": "../graph_pde_solver/dataset",
         "train_size": 1024,
         "val_size": 128,
         "test_size": 256,
-        "max_time_diff": 14,
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
-        "latent_queries": [64, 64],
-        "metric": "all_step",
-        "predict_mode": "autoregressive"
+        "latent_queries": [64, 64]
     },
 
     "optimizer": {
@@ -112,10 +109,10 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/rano/heat_l_sines.pt",
-        "loss_path":".loss/rano/heat_l_sines.png",
-        "result_path":".results/rano/heat_l_sines.png",
-        "database_path":".database/rano/heat_l_sines.csv"
+        "ckpt_path":".ckpt/rano/elasticity.pt",
+        "loss_path":".loss/rano/elasticity.png",
+        "result_path":".results/rano/elasticity.png",
+        "database_path":".database/rano/elasticity.csv"
     }
 }   
                 

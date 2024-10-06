@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from .optimizers import AdamOptimizer
 from .utils import manual_seed, load_ckpt, save_ckpt, compute_batch_errors, compute_final_metric
-from data.dataset import Metadata, DATASET_METADATA
+from ..data.dataset import Metadata, DATASET_METADATA
 
 class TrainerBase:
     """
@@ -30,9 +30,13 @@ class TrainerBase:
 
         self.device = self.setup_config.device
         manual_seed(self.setup_config.seed)
-        if self.setup_config.dtype == "float" or self.setup_config.dtype == "torch.float32":
+        if self.setup_config.dtype == "float" or \
+            self.setup_config.dtype == "torch.float32" or \
+            self.setup_config.dtype == "torch.FloatTensor":
             self.dtype = torch.float32
-        elif self.setup_config.dtype == "dobule" or self.setup_config.dtype == "torch.float64":
+        elif self.setup_config.dtype == "dobule" or \
+            self.setup_config.dtype == "torch.float64" or \
+            self.setup_config.dtype == "torch.DoubleTensor":
             self.dtype = torch.float64
         else:
             raise ValueError(f"Invalid dtype: {self.setup_config.dtype}")

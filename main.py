@@ -216,8 +216,8 @@ def run_arg(arg):
     arg.datarow['time']    = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     arg.datarow['relative error (poseidon_metric)'] = np.nan
     Trainer = {
-        "seq": SequentialTrainer,
-        "stat": StaticTrainer,
+        "sequential": SequentialTrainer,
+        "static": StaticTrainer,
     }[arg.setup["trainer_name"]]
     t = Trainer(arg)
     if arg.setup["train"]:

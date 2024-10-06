@@ -1,9 +1,9 @@
 {  
     "setup": {
         "seed": 42,
-        "device": "cuda:1",
+        "device": "cuda:0",
         "dtype": "torch.float32",
-        "trainer_name": "stat",
+        "trainer_name": "sequential",
         "train": true,
         "test" : false,
         "ckpt": false,
@@ -41,39 +41,42 @@
     },
 
     "dataset": {
-        "name": "elasticity",
-        "metaname": "rigno-unstructured/elasticity",
+        "name": "heat_l_sines",
+        "metaname": "rigno-unstructured/heat_l_sines",
         "base_path": "../graph_pde_solver/dataset",
         "train_size": 1024,
         "val_size": 128,
         "test_size": 256,
+        "max_time_diff": 14,
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
-        "latent_queries": [64, 64]
+        "latent_queries": [64, 64],
+        "metric": "all_step",
+        "predict_mode": "autoregressive"
     },
 
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 2e-2,
-            "epoch": 1000,
+            "lr": 1e-3,
+            "epoch": 6,
             "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
             "scheduler": "step",
             "scheduler_step_size": 100,
-            "scheduler_gamma": 0.3,
+            "scheduler_gamma": 0.8,
             "scheduler_T_max": 100,
             "scheduler_eta_min": 1e-4
         }
     },
 
     "path": {
-        "ckpt_path":".ckpt/gino/test/elasticity.pt",
-        "loss_path":".loss/gino/test/elasticity.png",
-        "result_path":".results/gino/test/elasticity.png",
-        "database_path":".database/gino/test/elasticity.csv"
+        "ckpt_path":".ckpt/gino/test/heat_l_sines.pt",
+        "loss_path":".loss/gino/test/heat_l_sines.png",
+        "result_path":".results/gino/test/heat_l_sines.png",
+        "database_path":".database/gino/test/heat_l_sines.csv"
     }
 
 }
