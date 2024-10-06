@@ -1,6 +1,6 @@
 import torch 
 import torch.nn as nn
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from typing import Union, Tuple, Optional
 from .message_passing import MessagePassingLayer, MessagePassingLayerConfig
 from .embedder import FeatureEncoderLayer
@@ -21,7 +21,7 @@ class DeepGraphNNConfig:
     use_edge_encode:bool = True
     use_node_decode:bool = True 
     use_edge_decode:bool = True
-    mpconfig:MessagePassingLayerConfig = MessagePassingLayerConfig()
+    mpconfig:MessagePassingLayerConfig = field(default_factory=MessagePassingLayerConfig)
 
 ############
 # Deep Graph Neural Network

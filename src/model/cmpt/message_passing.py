@@ -1,7 +1,7 @@
 import torch 
 import torch.nn as nn
 from typing import Union, Tuple, Optional, Any
-from dataclasses import dataclass, asdict, replace, is_dataclass, fields
+from dataclasses import dataclass, asdict, replace, is_dataclass, field
 from .mlp import AugmentedMLP, AugmentedMLPConfig
 from ...utils.dataclass import shallow_asdict
 from ...graph import Graph
@@ -13,8 +13,8 @@ from ...utils.pair import make_pair, is_pair
 
 @dataclass
 class MessagePassingLayerConfig:
-    edge_fn_config:AugmentedMLPConfig = AugmentedMLPConfig()
-    node_fn_config:AugmentedMLPConfig = AugmentedMLPConfig()
+    edge_fn_config:AugmentedMLPConfig = field(default_factory=AugmentedMLPConfig)
+    node_fn_config:AugmentedMLPConfig = field(default_factory=AugmentedMLPConfig)
     aggregate:str = "mean"
     aggregate_normalization:Optional[float] = None
     use_node_fn:bool = True

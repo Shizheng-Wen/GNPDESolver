@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn 
 import torch.nn.functional as F
 from typing import Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from .mlp import ConditionedNorm
 from ...utils.dataclass import shallow_asdict
 
@@ -31,8 +31,8 @@ class TransformerConfig:
     use_ffn_norm: bool = True
     norm_eps: float = 1e-6
     num_layers: int = 3
-    attn_config: AttentionConfig = AttentionConfig()
-    ffn_config: FFNConfig = FFNConfig()
+    attn_config: AttentionConfig = field(default_factory=AttentionConfig)
+    ffn_config: FFNConfig = field(default_factory=FFNConfig)
 
 """
 Reference: https://github.com/meta-llama/llama3/blob/main/llama/model.py
