@@ -172,7 +172,7 @@ class StaticTrainer(TrainerBase):
         self.config.datarow["relative error (poseidon_metric)"] = final_metric
 
         self.plot_results(self.rigraph.physical_to_regional.src_ndata['pos'], x_sample[0], y_sample[0], pred[0])
-            
+        
     def plot_results(self, coords, input, gt, pred):
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
 
@@ -200,23 +200,18 @@ class StaticTrainer(TrainerBase):
         self.model.to(self.device)
         with torch.no_grad():
             # Get a single sample from the test dataset
-            x_sample, y_sample, coord_sample = self.test_loader.dataset[0]
+            x_sample, y_sample = self.test_loader.dataset[0]
             # Ensure inputs are tensors and add batch dimension
             x_sample = x_sample.to(self.device).unsqueeze(0)  # Shape: [1, num_timesteps, num_nodes, num_channels]
-            coord_sample = coord_sample.to(self.device).unsqueeze(0)  # Shape: [1, num_timesteps, num_nodes, num_dims]
             # Since it's a static problem, squeeze the time dimension
             x_input = x_sample.squeeze(1)  # Shape: [1, num_nodes, num_channels]
-            coord_input = coord_sample.squeeze(1)  # Shape: [1, num_nodes, num_dims]
-            # Prepare input_geom and output_queries
-            input_geom = coord_input[0:1]  # Shape: [1, num_nodes, num_dims]
-            output_queries = coord_input[0]  # Shape: [num_nodes, num_dims]
             # Warm-up run
-            _ = self.model(self.rigraph, x_sample)
+            _ = self.model(self.rigraph, x_input)
             # Measure inference time over 10 runs
             times = []
             for _ in range(10):
                 start_time = time.perf_counter()
-                pred = self.model(self.rigraph, x_sample)
+                pred = self.model(self.rigraph, x_input)
                 # Ensure all CUDA kernels have finished before stopping the timer
                 if 'cuda' in str(self.device):
                     torch.cuda.synchronize()

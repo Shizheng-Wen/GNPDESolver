@@ -4,8 +4,8 @@
         "device": "cuda:0",
         "dtype": "torch.FloatTensor",
         "trainer_name": "static",
-        "train": true,
-        "test" : false,
+        "train": false,
+        "test" : true,
         "ckpt": false,
         "use_variance_test": false
     },
