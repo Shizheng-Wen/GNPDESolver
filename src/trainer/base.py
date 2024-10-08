@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .optimizers import AdamOptimizer
+from .optimizers import AdamOptimizer, AdamWOptimizer
 from .utils import manual_seed, load_ckpt, save_ckpt, compute_batch_errors, compute_final_metric
 from ..data.dataset import Metadata, DATASET_METADATA
 
@@ -71,7 +71,8 @@ class TrainerBase:
         """Initialize the optimizer"""
 
         self.optimizer = {
-            "adam": AdamOptimizer
+            "adam": AdamOptimizer,
+            "adamw":AdamWOptimizer
         }[self.optimizer_config["name"]](self.model.parameters(), self.optimizer_config["args"])
 
 # ------------ utils ------------ #
