@@ -82,8 +82,8 @@
     },
 
     "dataset": {
-        "name": "NS-SL",
-        "metaname": "rigno-unstructured/NS-SL",
+        "name": "CE-Gauss",
+        "metaname": "rigno-unstructured/CE-Gauss",
         "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
         "train_size": 1024,
         "val_size": 128,
@@ -114,10 +114,10 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/rano/ns_sl_ps2.pt",
-        "loss_path":".loss/rano/ns_sl_ps2.png",
-        "result_path":".results/rano/ns_sl_ps2.png",
-        "database_path":".database/rano/ns_sl_ps2.csv"
+        "ckpt_path":".ckpt/rano/ce_gauss.pt",
+        "loss_path":".loss/rano/ce_gauss.png",
+        "result_path":".results/rano/ce_gauss.png",
+        "database_path":".database/rano/ce_gauss.csv"
     }
 }   
                 

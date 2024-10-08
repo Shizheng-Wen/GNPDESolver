@@ -24,6 +24,7 @@
     "model": {
         "name": "rano",
         "drop_edge": 0.5,
+        "use_conditional_norm": false,
         "variable_mesh": false,
         "args":{
             "patch_size": 8,

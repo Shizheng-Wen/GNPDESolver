@@ -160,7 +160,11 @@ class SequentialTrainer(TrainerBase):
         self.config.datarow['r2p edges'] = self.rigraph.regional_to_physical.num_edges
 
     def init_model(self, model_config):
-        in_channels = self.u_mean.shape[0] + 2
+        in_channels = self.u_mean.shape[0] + 2 # add lead time and time difference
+        
+        if model_config.use_conditional_norm:
+            in_channels = in_channels - 1 
+
 
         if hasattr(self, 'c_mean'):
             in_channels += self.c_mean.shape[0]
@@ -180,7 +184,10 @@ class SequentialTrainer(TrainerBase):
         self.model.drop_edge = self.model_config.drop_edge
         batch_inputs, batch_outputs = batch
         batch_inputs, batch_outputs = batch_inputs.to(self.device), batch_outputs.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
-        pred = self.model(self.rigraph, batch_inputs)
+        if self.model_config.use_conditional_norm:
+            pred = self.model(self.rigraph, batch_inputs[...,:-1], batch_inputs[...,0,-2:-1]) # 
+        else:
+            pred = self.model(self.rigraph, batch_inputs)
         return self.loss_fn(pred, batch_outputs)
     
     def validate(self, loader):
@@ -190,7 +197,10 @@ class SequentialTrainer(TrainerBase):
         with torch.no_grad():
             for x_batch, y_batch in loader:
                 x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
-                pred = self.model(self.rigraph, x_batch)
+                if self.model_config.use_conditional_norm:
+                    pred = self.model(self.rigraph, x_batch[...,:-1], x_batch[...,0,-2:-1])
+                else:
+                    pred = self.model(self.rigraph, x_batch)
                 loss = self.loss_fn(pred, y_batch)
                 total_loss += loss.item()
         return total_loss / len(loader)
@@ -251,7 +261,10 @@ class SequentialTrainer(TrainerBase):
 
             # Forward pass
             with torch.no_grad():
-                pred = self.model(self.rigraph, x_input)
+                if self.model_config.use_conditional_norm:
+                    pred = self.model(self.rigraph, x_input[...,:-1], x_input[...,0,-2:-1])
+                else:
+                    pred = self.model(self.rigraph, x_input)
                 # pred shape: [batch_size, num_nodes, output_dim]
 
             # Store prediction

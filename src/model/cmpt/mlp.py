@@ -112,7 +112,7 @@ class ConditionedNorm(nn.Module):
         """
         scale = 1 + c * self.mlp_scale(c)
         bias = c * self.mlp_bias(c)
-        x    = x * scale + bias 
+        x    = x * scale[:,None,:] + bias[:,None,:]
         return x
 
 class AugmentedMLP(nn.Module):
@@ -168,9 +168,9 @@ class AugmentedMLP(nn.Module):
         else:
             self.norm = None
 
-        if use_conditional_norm:
+        if use_conditional_norm: # input size is 1 for time different $\tau$
             self.correction = ConditionedNorm(
-                output_size,
+                1,
                 output_size, 
                 cond_norm_hidden_size
             )

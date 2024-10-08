@@ -140,7 +140,7 @@ class GroupQueryFlashAttention(nn.Module):
         self.o_proj = nn.Linear(hidden_size, output_size,   bias=False)
 
         if use_conditional_norm:
-            self.correction = ConditionedNorm(output_size, output_size,cond_norm_hidden_size)
+            self.correction = ConditionedNorm(1, output_size,cond_norm_hidden_size)
         else:
             self.correction = None
             
@@ -177,9 +177,8 @@ class GroupQueryFlashAttention(nn.Module):
 
         x = x.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
         x = self.o_proj(x)
-
         if self.correction is not None:
-            x = self.correction(x, condition=condition)
+            x = self.correction(c=condition, x=x)
 
         return x
 
@@ -201,7 +200,7 @@ class FFN(nn.Module):
         self.w3 = nn.Linear(input_size, hidden_size, bias=False)
 
         if use_conditional_norm:
-            self.correction = ConditionedNorm(output_size, output_size,cond_norm_hidden_size)
+            self.correction = ConditionedNorm(1, output_size,cond_norm_hidden_size)
         else:
             self.correction = None
 
@@ -209,7 +208,7 @@ class FFN(nn.Module):
         x = self.w2(F.silu(self.w1(x))*self.w3(x))
 
         if self.correction is not None:
-            x = self.correction(x, condition = condition)
+            x = self.correction(c = condition, x=x)
 
         return x
 

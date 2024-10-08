@@ -24,10 +24,10 @@
     "model": {
         "name": "rano",
         "drop_edge": 0.0,
-        "use_conditional_norm": false,
+        "use_conditional_norm": true,
         "variable_mesh": false,
         "args":{
-            "patch_size": 2,
+            "patch_size": 8,
             "deepgnn": {
                 "node_latent_size": 16,
                 "edge_latent_size": 16,
@@ -46,7 +46,7 @@
                         "num_layers": 3,
                         "activation": "swish",
                         "use_layer_norm": true,
-                        "use_conditional_norm": false,
+                        "use_conditional_norm": true,
                         "cond_norm_hidden_size": 4
                     },
                     "node_fn_config": {
@@ -54,7 +54,7 @@
                         "num_layers": 3,
                         "activation": "swish",
                         "use_layer_norm": true,
-                        "use_conditional_norm": false,
+                        "use_conditional_norm": true,
                         "cond_norm_hidden_size": 4
                     }
                 }
@@ -69,12 +69,12 @@
                     "hidden_size": 256,
                     "num_heads": 8,
                     "num_kv_heads": 8,
-                    "use_conditional_norm": false,
+                    "use_conditional_norm": true,
                     "cond_norm_hidden_size": 4
                 },
                 "ffn_config": {
                     "hidden_size": 256,
-                    "use_conditional_norm": false,
+                    "use_conditional_norm": true,
                     "cond_norm_hidden_size": 4      
                 }
             }
@@ -114,10 +114,10 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/rano/ns_sl_ps2.pt",
-        "loss_path":".loss/rano/ns_sl_ps2.png",
-        "result_path":".results/rano/ns_sl_ps2.png",
-        "database_path":".database/rano/ns_sl_ps2.csv"
+        "ckpt_path":".ckpt/rano/ns_sl_ps8_tc.pt",
+        "loss_path":".loss/rano/ns_sl_ps8_tc.png",
+        "result_path":".results/rano/ns_sl_ps8_tc.png",
+        "database_path":".database/rano/ns_sl_ps8_tc.csv"
     }
 }   
                 

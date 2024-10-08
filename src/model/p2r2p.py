@@ -195,6 +195,7 @@ class Physical2Regional2Physical(nn.Module):
         torch.Tensor
             The output tensor of shape [..., n_physical_nodes, output_size]
         """
+        
         pndata, rndata = self.encode(graphs.physical_to_regional, pndata, condition)
 
         rndata = self.process(graphs.regional_to_regional, rndata, condition)
