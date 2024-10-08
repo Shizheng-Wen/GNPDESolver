@@ -26,7 +26,7 @@
         "drop_edge": 0.5,
         "variable_mesh": false,
         "args":{
-            "patch_size": 8,
+            "patch_size": 2,
             "deepgnn": {
                 "node_latent_size": 16,
                 "edge_latent_size": 16,
@@ -113,10 +113,10 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/rano/ns_sl_ps8.pt",
-        "loss_path":".loss/rano/ns_sl_ps8.png",
-        "result_path":".results/rano/ns_sl_ps8.png",
-        "database_path":".database/rano/ns_sl_ps8.csv"
+        "ckpt_path":".ckpt/rano/ns_sl_ps2_dropedge.pt",
+        "loss_path":".loss/rano/ns_sl_ps2_dropedge.png",
+        "result_path":".results/rano/ns_sl_ps2_dropedge.png",
+        "database_path":".database/rano/ns_sl_ps2_dropedge.csv"
     }
 }   
                 

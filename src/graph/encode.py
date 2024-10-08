@@ -37,8 +37,9 @@ def node_pos_encode(x:torch.Tensor,
         device = x.device
         freqs = torch.arange(1, freq+1).to(device=device) # [freq]
         phi   = np.pi * (x + 1)
-        x = freqs[None, :] * phi[:, None] # [n_points, freq]
-        x = torch.stack([x.sin(), x.cos()], axis=-1).reshape(x.shape[0],-1) # [n_points, 2*freq]
+        x = freqs[None, :, None] * phi[:, None, :] # [n_points, 1, dim] * [1, freq, 1] -> [n_points, freq, dim]
+        x = torch.cat([x.sin(), x.cos()], dim=2)  # [n_points, freq, dim * 2]
+        x = x.view(x.shape[0], -1)  # [n_points, freq * 2 * dim]
     
     if ndata is not None:
         dtype = x.dtype
@@ -89,7 +90,6 @@ def edge_pos_encode(u:torch.Tensor,
     u_e, v_e = u[edges[0]], v[edges[1]] # [n_edges, n_dim]
     z_uv = u_e - v_e # [n_edges, n_dim]
     assert (z_uv.abs() <= 2.0).all(), "The edge length should be less than 2.0"
-    
     if periodic:
         if domain_shifts is None:
             z_uv = torch.where(z_uv >= 1., z_uv - 2., z_uv)

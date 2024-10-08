@@ -45,7 +45,7 @@ class RegionInteractionGraph(nn.Module):
 
         if regional_points is None:
             if periodic:
-                _domain_shifts = domain_shifts((2.0,2.0))
+                _domain_shifts = domain_shifts((2.0,2.0)).to(physical_points.device)
                 regional_points = subsample(physical_points, factor=sample_factor)
             else:
                 _domain_shifts = None
@@ -60,12 +60,11 @@ class RegionInteractionGraph(nn.Module):
             regional_points = torch.stack(meshgrid, dim=-1).reshape(-1,2).to(physical_points.device)
 
             if periodic:
-                _domain_shifts = domain_shifts((2.0,2.0))
+                _domain_shifts = domain_shifts((2.0,2.0)).to(physical_points.device)
                 regional_points = rescale(regional_points, (-1,1))
             else:
                 _domain_shifts = None
                 regional_points = rescale(regional_points, (-1,1))
-
         radii = minimal_support(regional_points, _domain_shifts)
         # compute physical to regional edges
         p2r_edges = radius_bipartite_graph(
@@ -94,7 +93,7 @@ class RegionInteractionGraph(nn.Module):
             edges = r2r_edges, 
             pos = regional_points,
             ndata = (overlap_factor_r2p * radii)[:,None],
-            domain_shifts = domain_shifts,
+            domain_shifts = _domain_shifts,
             domain_edges = domains,
             max_edge_length = 2 * np.sqrt(regional_points.shape[1]),
             periodic        = periodic,

@@ -6,7 +6,7 @@
         "trainer_name": "sequential",
         "train": true,
         "test" : false,
-        "ckpt": false,
+        "ckpt": true,
         "use_variance_test": false
     },
 
@@ -23,10 +23,10 @@
 
     "model": {
         "name": "rano",
-        "drop_edge": 0.5,
+        "drop_edge": 0.0,
         "variable_mesh": false,
         "args":{
-            "patch_size": 8,
+            "patch_size": 2,
             "deepgnn": {
                 "node_latent_size": 16,
                 "edge_latent_size": 16,
@@ -99,7 +99,7 @@
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 1e-3,
+            "lr": 3.3e-4,
             "epoch": 500,
             "batch_size": 32,
             "loss_scale": 1.0,
@@ -113,10 +113,10 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/rano/ns_sl_ps8.pt",
-        "loss_path":".loss/rano/ns_sl_ps8.png",
-        "result_path":".results/rano/ns_sl_ps8.png",
-        "database_path":".database/rano/ns_sl_ps8.csv"
+        "ckpt_path":".ckpt/rano/ns_sl_ps2.pt",
+        "loss_path":".loss/rano/ns_sl_ps2_cont.png",
+        "result_path":".results/rano/ns_sl_ps2_cont.png",
+        "database_path":".database/rano/ns_sl_ps2_cont.csv"
     }
 }   
                 

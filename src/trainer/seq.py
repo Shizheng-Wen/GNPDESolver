@@ -177,6 +177,7 @@ class SequentialTrainer(TrainerBase):
                                             )
 
     def train_step(self, batch):
+        self.model.drop_edge = self.model_config.drop_edge
         batch_inputs, batch_outputs = batch
         batch_inputs, batch_outputs = batch_inputs.to(self.device), batch_outputs.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
         pred = self.model(self.rigraph, batch_inputs)
@@ -184,6 +185,7 @@ class SequentialTrainer(TrainerBase):
     
     def validate(self, loader):
         self.model.eval()
+        self.model.drop_edge = 0.0
         total_loss = 0.0
         with torch.no_grad():
             for x_batch, y_batch in loader:
@@ -265,6 +267,7 @@ class SequentialTrainer(TrainerBase):
     def test(self):
         self.model.eval()
         self.model.to(self.device)
+        self.model.drop_edge = 0.0
         all_relative_errors = []
         if self.dataset_config["predict_mode"] == "autoregressive":
             time_indices = np.arange(0, 15, 2) # [0, 2, 4, ..., 14]

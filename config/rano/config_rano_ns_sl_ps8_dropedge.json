@@ -113,10 +113,10 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/rano/ns_sl_ps8.pt",
-        "loss_path":".loss/rano/ns_sl_ps8.png",
-        "result_path":".results/rano/ns_sl_ps8.png",
-        "database_path":".database/rano/ns_sl_ps8.csv"
+        "ckpt_path":".ckpt/rano/ns_sl_ps8_dropedge.pt",
+        "loss_path":".loss/rano/ns_sl_ps8_dropedge.png",
+        "result_path":".results/rano/ns_sl_ps8_dropedge.png",
+        "database_path":".database/rano/ns_sl_ps8_dropedge.csv"
     }
 }   
                 

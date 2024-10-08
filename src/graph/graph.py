@@ -329,7 +329,8 @@ class Graph(nn.Module):
                  src_ndata:Optional[Union[Mapping[str,torch.Tensor],torch.Tensor]] = None, 
                  dst_ndata:Optional[Union[Mapping[str,torch.Tensor],torch.Tensor]] = None,
                  edata:Optional[Union[Mapping[str,torch.Tensor],torch.Tensor]] = None,
-                 gdata:Optional[Union[Mapping[str,torch.Tensor],torch.Tensor]] = None):
+                 gdata:Optional[Union[Mapping[str,torch.Tensor],torch.Tensor]] = None,
+                 batch_identifier:Optional[bool] = None):
         super().__init__()
 
         self.register_buffer("edges", edges)
@@ -344,7 +345,7 @@ class Graph(nn.Module):
             self.dst_ndata = BufferDict(make_dict(dst_ndata)) if dst_ndata is not None else None
         
         if edata is not None:
-            assert edata.shape[0] == edges.shape[1]
+            #assert edata.shape[0] == edges.shape[1]
             self.edata = BufferDict(make_dict(edata))
         else:
             self.edata = None   
@@ -354,7 +355,7 @@ class Graph(nn.Module):
         else:
             self.gdata = None
 
-        self.batch_identifier = None
+        self.batch_identifier = batch_identifier
     @property 
     def ndim(self)->Union[int, Tuple[int, int]]:
         if self.ndata is not None:
@@ -616,6 +617,7 @@ class Graph(nn.Module):
             ndata = self.ndata,
             src_ndata = self.src_ndata.asdict(),
             dst_ndata = self.dst_ndata.asdict(),
+            batch_identifier = self.batch_identifier,
             edata = {k:v[...,mask,:] for k,v in self.edata.asdict().items()}
         )
 
@@ -682,7 +684,6 @@ class Graph(nn.Module):
         edges: torch.Tensor
             2D tensor of shape [2, n_edges]
         """
-        
         src_ndata = node_pos_encode(src_pos, src_ndata, freq=node_freq, periodic=periodic, add_dummy_node=add_dummy_node)
         dst_ndata = node_pos_encode(dst_pos, dst_ndata, freq=node_freq, periodic=periodic, add_dummy_node=add_dummy_node)
         edata = edge_pos_encode(src_pos, dst_pos, edges, periodic=periodic, max_edge_length=max_edge_length, domain_shifts=domain_shifts, domain_edges=domain_edges)
