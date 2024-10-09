@@ -6,7 +6,7 @@
         "trainer_name": "sequential",
         "train": true,
         "test" : false,
-        "ckpt": false,
+        "ckpt": true,
         "use_variance_test": false
     },
 
@@ -100,7 +100,7 @@
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 1e-3,
+            "lr": 3.3e-4,
             "epoch": 500,
             "batch_size": 32,
             "loss_scale": 1.0,

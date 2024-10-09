@@ -3,7 +3,7 @@
         "seed": 42,
         "device": "cuda:0",
         "dtype": "torch.float32",
-        "trainer_name": "sequential",
+        "trainer_name": "static",
         "train": true,
         "test" : false,
         "ckpt": false,
@@ -42,7 +42,7 @@
                     "use_node_fn": true,
                     "use_edge_fn": true,
                     "edge_fn_config": {
-                        "hidden_size": 32,
+                        "hidden_size": 16,
                         "num_layers": 3,
                         "activation": "swish",
                         "use_layer_norm": true,
@@ -50,7 +50,7 @@
                         "cond_norm_hidden_size": 4
                     },
                     "node_fn_config": {
-                        "hidden_size": 32,
+                        "hidden_size": 16,
                         "num_layers": 3,
                         "activation": "swish",
                         "use_layer_norm": true,
@@ -64,7 +64,7 @@
                 "use_attn_norm": true,
                 "use_ffn_norm": true,
                 "norm_eps": 1e-6,
-                "num_layers": 5,
+                "num_layers": 3,
                 "attn_config": {
                     "hidden_size": 256,
                     "num_heads": 8,
@@ -73,7 +73,7 @@
                     "cond_norm_hidden_size": 4
                 },
                 "ffn_config": {
-                    "hidden_size": 1024,
+                    "hidden_size": 256,
                     "use_conditional_norm": false,
                     "cond_norm_hidden_size": 4      
                 }
@@ -82,13 +82,12 @@
     },
 
     "dataset": {
-        "name": "NS-SL",
-        "metaname": "rigno-unstructured/NS-SL",
+        "name": "elasticity",
+        "metaname": "rigno-unstructured/elasticity",
         "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
         "train_size": 1024,
         "val_size": 128,
         "test_size": 256,
-        "max_time_diff": 14,
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
@@ -114,10 +113,10 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/rano/ns_sl_ps2_adamw.pt",
-        "loss_path":".loss/rano/ns_sl_ps2_adamw.png",
-        "result_path":".results/rano/ns_sl_ps2_adamw.png",
-        "database_path":".database/rano/ns_sl_ps2_adamw.csv"
+        "ckpt_path":".ckpt/rano/elasticity.pt",
+        "loss_path":".loss/rano/elasticity.png",
+        "result_path":".results/rano/elasticity.png",
+        "database_path":".database/rano/elasticity.csv"
     }
 }   
                 

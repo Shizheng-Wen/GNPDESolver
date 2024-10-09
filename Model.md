@@ -79,3 +79,72 @@ MLP to do the projection.
 
 
 
+
+```
+    "model": {
+        "name": "rano",
+        "drop_edge": 0.0,
+        "use_conditional_norm": false,
+        "variable_mesh": false,
+        "args":{
+            "patch_size": 2,
+            "deepgnn": {
+                "node_latent_size": 16,
+                "edge_latent_size": 16,
+                "num_message_passing_steps": 3,
+                "use_node_encode": true,
+                "use_edge_encode": true,
+                "use_node_decode": true,
+                "use_edge_decode": true,
+                "mpconfig": {
+                    "aggregate": "mean",
+                    "aggregate_normalization": null,
+                    "use_node_fn": true,
+                    "use_edge_fn": true,
+                    "edge_fn_config": {
+                        "hidden_size": 64,
+                        "num_layers": 3,
+                        "activation": "swish",
+                        "use_layer_norm": true,
+                        "use_conditional_norm": false,
+                        "cond_norm_hidden_size": 4
+                    },
+                    "node_fn_config": {
+                        "hidden_size": 64,
+                        "num_layers": 3,
+                        "activation": "swish",
+                        "use_layer_norm": true,
+                        "use_conditional_norm": false,
+                        "cond_norm_hidden_size": 4
+                    }
+                }
+            },
+            "transformer": {
+                "hidden_size": 256,
+                "use_attn_norm": true,
+                "use_ffn_norm": true,
+                "norm_eps": 1e-6,
+                "num_layers": 3,
+                "attn_config": {
+                    "hidden_size": 256,
+                    "num_heads": 8,
+                    "num_kv_heads": 8,
+                    "use_conditional_norm": false,
+                    "cond_norm_hidden_size": 4
+                },
+                "ffn_config": {
+                    "hidden_size": 256,
+                    "use_conditional_norm": false,
+                    "cond_norm_hidden_size": 4      
+                }
+            }
+        }
+    },
+```
+|Argument| Function|
+|--------|---------|
+|variable_mesh| if desginated, the output points can differ from the input points.|
+|use_conditional_norm| If set to true, using the time-conditioned layer for NN|
+|node_latent_size| In the encoder, decoder, and MP (processor), the latent dimension of the node.|
+|edge_latent_size| the latent dimension of the edge.|
+|hidden_size| The hidden size layer for the edge_fn and node_fn (MLP)|

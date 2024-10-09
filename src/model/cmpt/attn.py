@@ -240,9 +240,7 @@ class TransformerBlock(nn.Module):
                 ffn_config:FFNConfig = FFNConfig()
                 ):
         super().__init__()
-        assert input_size == attn_config.hidden_size, f"input_size {input_size} must be equal to attn_config.hidden_size {attn_config.hidden_size}"
-        assert output_size == ffn_config.hidden_size, f"output_size {output_size} must be equal to ffn_config.hidden_size {ffn_config.hidden_size}"
-        
+                
         self.attn = GroupQueryFlashAttention.from_config(input_size, 
                                     attn_config.hidden_size, 
                                     config = attn_config)
@@ -292,7 +290,6 @@ class Transformer(nn.Module):
         super().__init__()
         hidden_size:int = config.hidden_size
         num_layers:int  = config.num_layers
-
         if input_size != hidden_size:
             self.input_proj = nn.Linear(input_size, hidden_size)
         else:

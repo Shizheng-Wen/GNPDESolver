@@ -163,7 +163,7 @@ class AdamWOptimizer:
     eval_every_eps: int
 
     def __init__(self, params, config):
-        self.optimizer = torch.optim.AdamW(params, lr=config.lr, weight_decay=1e-8)
+        self.optimizer = torch.optim.AdamW(params, lr=config.lr, weight_decay=config.weight_decay)
         self.epoch = config.epoch
         self.lr = config.lr  
         self.loss_scale = config.loss_scale

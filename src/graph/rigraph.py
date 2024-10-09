@@ -102,22 +102,31 @@ class RegionInteractionGraph(nn.Module):
         )
 
         # compute regional to physical edges
+        # Actually, the r2p_edges can directly use the r2p_edges = torch.flip(p2r_edges, dims=(0,))
+        # Under this circumstance, we don't need to recaculate the raddi anymore, use the calculated results above
+        radii = minimal_support(physical_points, _domain_shifts)
         if output_points is None:
-            r2p_edges = torch.flip(p2r_edges, dims=(0,))
+            #r2p_edges = torch.flip(p2r_edges, dims=(0,))
+            r2p_edges = radius_bipartite_graph(
+                regional_points, 
+                physical_points, 
+                radii * overlap_factor_r2p, 
+                periodic
+            )
         else:
-            r2p_edges = torch.flip(radius_bipartite_graph(
+            r2p_edges = radius_bipartite_graph(
                 output_physical_points, 
                 regional_points, 
                 radii * overlap_factor_r2p, 
                 periodic
-            ), dims=(0,))
+            )
 
         regional_to_physical = Graph.bipartite_with_pos_encode(
             r2p_edges, 
             src_pos   = regional_points, 
             dst_pos   = physical_points,
             max_edge_length = 2 * np.sqrt(regional_points.shape[1]),
-            src_ndata       = (overlap_factor_r2p * radii)[:, None],
+            dst_ndata       = (overlap_factor_r2p * radii)[:, None],
             periodic        = periodic,
             add_dummy_node  = add_dummy_node,
             with_additional_info = with_additional_info

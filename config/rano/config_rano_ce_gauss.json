@@ -42,7 +42,7 @@
                     "use_node_fn": true,
                     "use_edge_fn": true,
                     "edge_fn_config": {
-                        "hidden_size": 16,
+                        "hidden_size": 32,
                         "num_layers": 3,
                         "activation": "swish",
                         "use_layer_norm": true,
@@ -50,7 +50,7 @@
                         "cond_norm_hidden_size": 4
                     },
                     "node_fn_config": {
-                        "hidden_size": 16,
+                        "hidden_size": 32,
                         "num_layers": 3,
                         "activation": "swish",
                         "use_layer_norm": true,
@@ -64,7 +64,7 @@
                 "use_attn_norm": true,
                 "use_ffn_norm": true,
                 "norm_eps": 1e-6,
-                "num_layers": 3,
+                "num_layers": 5,
                 "attn_config": {
                     "hidden_size": 256,
                     "num_heads": 8,
@@ -73,7 +73,7 @@
                     "cond_norm_hidden_size": 4
                 },
                 "ffn_config": {
-                    "hidden_size": 256,
+                    "hidden_size": 1024,
                     "use_conditional_norm": false,
                     "cond_norm_hidden_size": 4      
                 }
@@ -100,7 +100,7 @@
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 1e-3,
+            "lr": 5e-3,
             "epoch": 500,
             "batch_size": 32,
             "loss_scale": 1.0,

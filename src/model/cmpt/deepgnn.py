@@ -177,7 +177,6 @@ class DeepGraphNN(nn.Module):
                     Tuple[torch.Tensor, torch.Tensor],
                     Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]  
                 ]:
-    
         if self.encoder is not None:
             ndata, edata = self.encoder(ndata, edata, condition=condition)
     
