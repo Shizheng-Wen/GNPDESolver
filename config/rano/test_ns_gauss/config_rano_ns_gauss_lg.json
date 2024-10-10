@@ -6,7 +6,7 @@
         "trainer_name": "sequential",
         "train": true,
         "test" : false,
-        "ckpt": true,
+        "ckpt": false,
         "use_variance_test": false
     },
 
@@ -18,7 +18,7 @@
         "regional_level": 1,
         "add_dummy_node": false,
         "with_additional_info": true,
-        "regional_points": [64, 64]
+        "regional_points": [96, 96]
     },
 
     "model": {
@@ -27,7 +27,7 @@
         "use_conditional_norm": false,
         "variable_mesh": false,
         "args":{
-            "patch_size": 2,
+            "patch_size": 4,
             "deepgnn": {
                 "node_latent_size": 16,
                 "edge_latent_size": 16,
@@ -92,16 +92,17 @@
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
+        "latent_queries": [64, 64],
         "metric": "final_step",
         "predict_mode": "autoregressive"
     },
 
+
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 5e-4,
+            "lr": 1e-3,
             "epoch": 500,
-            "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
             "scheduler": "step",
@@ -113,10 +114,10 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/rano/ns_gauss.pt",
-        "loss_path":".loss/rano/ns_gauss.png",
-        "result_path":".results/rano/ns_gauss.png",
-        "database_path":".database/rano/ns_gauss.csv"
+        "ckpt_path":".ckpt/rano/testns_gauss/ns_gauss_lg.pt",
+        "loss_path":".loss/rano/testns_gauss/ns_gauss_lg.png",
+        "result_path":".results/rano/testns_gauss/ns_gauss_lg.png",
+        "database_path":".database/rano/testns_gauss/ns_gauss_lg.csv"
     }
 }   
                 

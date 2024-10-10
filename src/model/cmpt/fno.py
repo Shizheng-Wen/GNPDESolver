@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from typing import Union, List, Optional
+from dataclasses import dataclass
+
 from .mlp import ChannelMLP
 from .utils.fno_utils import CGELU, ctanh, ComplexValued
 from .utils.fno_utils import AdaIN, InstanceNorm
@@ -10,6 +12,15 @@ from .utils.fno_utils import skip_connection
 from .utils.fno_utils import validate_scaling_factor
 from .spectral_convolution import SpectralConv
 
+
+@dataclass
+class FNOConfig:
+    n_layers: int = 3
+    n_modes: tuple = (16,16)
+    hidden_channels: int = 64
+    lifting_channels: int = 256
+    n_layers: int = 4
+    fno_skip: str = 'linear'
 
 class FNOBlocks(nn.Module):
     """FNOBlocks implements a sequence of Fourier layers

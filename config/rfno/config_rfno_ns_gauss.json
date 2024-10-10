@@ -6,7 +6,7 @@
         "trainer_name": "sequential",
         "train": true,
         "test" : false,
-        "ckpt": true,
+        "ckpt": false,
         "use_variance_test": false
     },
 
@@ -22,7 +22,7 @@
     },
 
     "model": {
-        "name": "rano",
+        "name": "rfno",
         "drop_edge": 0.0,
         "use_conditional_norm": false,
         "variable_mesh": false,
@@ -59,24 +59,11 @@
                     }
                 }
             },
-            "transformer": {
-                "hidden_size": 256,
-                "use_attn_norm": true,
-                "use_ffn_norm": true,
-                "norm_eps": 1e-6,
-                "num_layers": 3,
-                "attn_config": {
-                    "hidden_size": 256,
-                    "num_heads": 8,
-                    "num_kv_heads": 8,
-                    "use_conditional_norm": false,
-                    "cond_norm_hidden_size": 4
-                },
-                "ffn_config": {
-                    "hidden_size": 256,
-                    "use_conditional_norm": false,
-                    "cond_norm_hidden_size": 4      
-                }
+            "fno": {
+                "n_layers": 3,
+                "n_modes": [16,16],
+                "hidden_channels": 64,
+                "lifting_channels": 256
             }
         }
     },
@@ -99,7 +86,7 @@
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 5e-4,
+            "lr": 1e-3,
             "epoch": 500,
             "batch_size": 32,
             "loss_scale": 1.0,
@@ -112,11 +99,12 @@
         }
     },
 
+
     "path": {
-        "ckpt_path":".ckpt/rano/ns_gauss.pt",
-        "loss_path":".loss/rano/ns_gauss.png",
-        "result_path":".results/rano/ns_gauss.png",
-        "database_path":".database/rano/ns_gauss.csv"
+        "ckpt_path":".ckpt/rfno/ns_gauss.pt",
+        "loss_path":".loss/rfno/ns_gauss.png",
+        "result_path":".results/rfno/ns_gauss.png",
+        "database_path":".database/rfno/ns_gauss.csv"
     }
 }   
                 
