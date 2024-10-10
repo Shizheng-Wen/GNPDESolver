@@ -2,10 +2,25 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .utils.gno_utils import Activation, segment_csr
-from .mlp import LinearChannelMLP
-from dataclasses import dataclass, replace
+from .utils.gno_utils import Activation, segment_csr, NeighborSearch
+from .mlp import LinearChannelMLP, ChannelMLP
+from ...graph import RegionInteractionGraph
+
+from dataclasses import dataclass, replace, field
 from typing import Union, Tuple, Optional
+
+@dataclass
+class GNOConfig:
+    gno_coord_dim: int = 2
+    projection_channels: int = 256
+    in_gno_channel_mlp_hidden_layers: list = field(default_factory=lambda: [64, 64, 64])
+    out_gno_channel_mlp_hidden_layers: list = field(default_factory=lambda: [64, 64])
+    lifting_channels: int = 256
+    gno_radius: float = 0.033
+    gno_use_open3d: bool = False
+    in_gno_transform_type: str = 'linear'
+    out_gno_transform_type: str = 'linear'
+    gno_use_torch_scatter: str = True
 
 ############
 # Integral Transform (GNO)
@@ -184,7 +199,7 @@ class IntegralTransform(nn.Module):
             agg_features = torch.cat([agg_features, in_features], dim=-1)
 
         rep_features = self.channel_mlp(agg_features)
-
+    
         if f_y is not None and self.transform_type != "nonlinear_kernelonly":
             rep_features = rep_features * in_features
 
@@ -208,3 +223,103 @@ class IntegralTransform(nn.Module):
         out_features = segment_csr(rep_features, splits, reduce=reduction, use_scatter=self.use_torch_scatter)
 
         return out_features
+
+############
+# GNO Encoder
+############
+class GNOEncoder(nn.Module):
+    def __init__(self, in_channels, out_channels, gno_config):
+        super().__init__()
+        self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
+
+        in_kernel_in_dim = gno_config.gno_coord_dim * 2
+        if gno_config.in_gno_transform_type == "nonlinear" or gno_config.in_gno_transform_type == "nonlinear_kernelonly":
+            in_kernel_in_dim += in_channels
+        
+        gno_config.in_gno_channel_mlp_hidden_layers.insert(0, in_kernel_in_dim)
+        gno_config.in_gno_channel_mlp_hidden_layers.append(out_channels)
+        self.gno = IntegralTransform(
+            channel_mlp_layers= gno_config.in_gno_channel_mlp_hidden_layers,
+            transform_type=gno_config.in_gno_transform_type,
+            use_torch_scatter=gno_config.gno_use_torch_scatter
+        )
+        self.gno_radius = gno_config.gno_radius
+
+    def forward(self, graph: RegionInteractionGraph, pndata: torch.Tensor) -> torch.Tensor:
+        batch_size = pndata.shape[0]
+        input_geom = graph.physical_to_regional.src_ndata['pos'].to(pndata.device)
+        n_regional_nodes, dim = graph.physical_to_regional.dst_ndata['pos'].shape
+        n = int(torch.sqrt(torch.tensor(n_regional_nodes)))
+
+        latent_queries = graph.physical_to_regional.dst_ndata['pos'].view(n, n, dim).to(pndata.device) 
+
+
+        spatial_nbrs = self.nb_search(
+            input_geom,
+            latent_queries.view((-1, latent_queries.shape[-1])),
+            self.gno_radius
+        )
+
+        encoded = self.gno(
+            y=input_geom,
+            x=latent_queries.view((-1, latent_queries.shape[-1])),
+            f_y=pndata,
+            neighbors=spatial_nbrs
+        ) # [batch_size, num_nodes, channels]
+        return encoded
+
+
+############
+# GNO Decoder
+############
+class GNODecoder(nn.Module):
+    def __init__(self, in_channels, out_channels, gno_config):
+        super().__init__()
+        self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
+        out_kernel_in_dim = gno_config.gno_coord_dim * 2
+        out_kernel_in_dim += out_channels if gno_config.out_gno_transform_type != 'linear' else 0
+        gno_config.out_gno_channel_mlp_hidden_layers.insert(0, out_kernel_in_dim)
+        gno_config.out_gno_channel_mlp_hidden_layers.append(in_channels)
+
+        self.gno = IntegralTransform(
+            channel_mlp_layers= gno_config.out_gno_channel_mlp_hidden_layers,
+            transform_type=gno_config.out_gno_transform_type,
+            use_torch_scatter=gno_config.gno_use_torch_scatter
+        )
+        self.gno_radius = gno_config.gno_radius
+
+        self.projection = ChannelMLP(
+            in_channels = in_channels,
+            out_channels = out_channels,
+            hidden_channels = gno_config.projection_channels,
+            n_layers=2,
+            n_dim=1,
+        )
+
+
+
+    def forward(self, graph: RegionInteractionGraph, rndata: torch.Tensor) -> torch.Tensor:
+        batch_size = rndata.shape[0]
+        input_geom = graph.regional_to_physical.src_ndata['pos'].to(rndata.device)
+        n_regional_nodes, dim = graph.regional_to_physical.dst_ndata['pos'].shape
+        n = int(torch.sqrt(torch.tensor(n_regional_nodes)))
+
+        latent_queries = graph.regional_to_physical.dst_ndata['pos'].view(n, n, dim).to(rndata.device) 
+
+        spatial_nbrs = self.nb_search(
+            input_geom,
+            latent_queries.view((-1, latent_queries.shape[-1])),
+            self.gno_radius
+        )
+        decoded = self.gno(
+            y=input_geom,
+            x=latent_queries.view((-1, latent_queries.shape[-1])),
+            f_y=rndata,
+            neighbors=spatial_nbrs
+        )
+
+        decoded = decoded.permute(0,2,1)
+        decoded = self.projection(decoded).permute(0, 2, 1)  
+
+
+        return decoded

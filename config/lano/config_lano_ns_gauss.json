@@ -22,22 +22,39 @@
     },
 
     "model": {
-        "name": "gino",
+        "name": "lano",
         "drop_edge": 0.0,
         "use_conditional_norm": false,
         "variable_mesh": false,
-        "args": {
-            "gno_coord_dim": 2,
-            "projection_channels": 256,
-            "in_gno_channel_mlp_hidden_layers": [64, 64, 64],
-            "out_gno_channel_mlp_hidden_layers": [64, 64],
-            "fno_in_channels": 64,
-            "fno_n_modes": [16, 16],
-            "lifting_channels": 256,
-            "fno_n_layers": 3,
-            "in_gno_transform_type": "nonlinear",
-            "out_gno_transform_type": "nonlinear",
-            "gno_radius": 0.033
+        "args":{
+            "patch_size": 2,
+            "gno": {
+                "gno_coord_dim": 2,
+                "projection_channels": 256,
+                "in_gno_channel_mlp_hidden_layers": [64, 64, 64],
+                "out_gno_channel_mlp_hidden_layers": [64, 64],
+                "lifting_channels": 256,
+                "gno_radius": 0.033
+            },
+            "transformer": {
+                "hidden_size": 256,
+                "use_attn_norm": true,
+                "use_ffn_norm": true,
+                "norm_eps": 1e-6,
+                "num_layers": 3,
+                "attn_config": {
+                    "hidden_size": 256,
+                    "num_heads": 8,
+                    "num_kv_heads": 8,
+                    "use_conditional_norm": false,
+                    "cond_norm_hidden_size": 4
+                },
+                "ffn_config": {
+                    "hidden_size": 256,
+                    "use_conditional_norm": false,
+                    "cond_norm_hidden_size": 4      
+                }
+            }
         }
     },
 
@@ -52,6 +69,7 @@
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
+        "latent_queries": [64, 64],
         "metric": "final_step",
         "predict_mode": "autoregressive"
     },
@@ -59,7 +77,7 @@
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 2e-3,
+            "lr": 1e-3,
             "epoch": 500,
             "batch_size": 32,
             "loss_scale": 1.0,
@@ -73,13 +91,11 @@
     },
 
     "path": {
-        "ckpt_path":".ckpt/gino/ns_gauss.pt",
-        "loss_path":".loss/gino/ns_gauss.png",
-        "result_path":".results/gino/ns_gauss.png",
-        "database_path":".database/gino/ns_gauss.csv"
+        "ckpt_path":".ckpt/lano/ns_gauss.pt",
+        "loss_path":".loss/lano/ns_gauss.png",
+        "result_path":".results/lano/ns_gauss.png",
+        "database_path":".database/lano/ns_gauss.csv"
     }
-
-    
-}
-
-
+}   
+                
+            

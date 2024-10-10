@@ -24,6 +24,7 @@
     "model": {
         "name": "gino",
         "drop_edge": 0.0,
+        "use_conditional_norm": false,
         "variable_mesh": false,
         "args": {
             "gno_coord_dim": 2,
@@ -51,7 +52,6 @@
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
-        "latent_queries": [64, 64],
         "metric": "final_step",
         "predict_mode": "autoregressive"
     },
@@ -59,7 +59,7 @@
     "optimizer": {
         "name": "adam",
         "args": {
-            "lr": 2e-3,
+            "lr": 1e-3,
             "epoch": 500,
             "batch_size": 32,
             "loss_scale": 1.0,

@@ -6,12 +6,16 @@ import math
 from .rano import RANO
 from .gino import GINO, GINOConfig
 from .rfno import RFNO
+from .lano import LANO
+
+
 from .p2r2p import Physical2Regional2Physical
 from .cmpt.deepgnn import DeepGraphNN,DeepGraphNNConfig
 from .cmpt.attn import TransformerConfig
 from .cmpt.message_passing import MessagePassingLayerConfig
 from .cmpt.mlp import AugmentedMLPConfig
 from .cmpt.fno import FNOConfig
+from .cmpt.gno import GNOConfig
 
 from ..graph import RegionInteractionGraph
 from ..utils.dataclass import shallow_asdict
@@ -25,14 +29,16 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
                             gnnconfig:DeepGraphNNConfig = DeepGraphNNConfig(),
                             attnconfig:TransformerConfig = TransformerConfig(),
                             ginoconfig:GINOConfig = GINOConfig(),
+                            gnoconfig: GNOConfig = GNOConfig(),
                             config:dataclass = None
                             )->Union[Physical2Regional2Physical, RANO, GINO]:
     
-    assert model.lower() in ["rigno", "rano", "gino", "rfno"], f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno'. "
+    assert model.lower() in ["rigno", "rano", "gino", "rfno", "lano"], f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno', 'lano'. "
     
     deepgnn_struct = OmegaConf.structured(DeepGraphNNConfig)
     attn_struct = OmegaConf.structured(TransformerConfig)
     fno_struct = OmegaConf.structured(FNOConfig)
+    gno_struct = OmegaConf.structured(GNOConfig)
 
     num_nodes = rigraph.regional_to_regional.num_nodes
     sqrt_num_nodes = int(math.sqrt(num_nodes))
@@ -102,5 +108,29 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
                     fno_config = fno_config,
                     regional_points = regional_points 
                 )
-        raise ValueError(f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno' ")
+    
+    elif model.lower() == 'lano':
+        if config is None:
+            return LANO(
+                input_size = input_size,
+                output_size = output_size,
+                rigraph = rigraph,
+            )
+        else:
+            gno_config = OmegaConf.merge(gno_struct, config.gno)
+            attn_config = OmegaConf.merge(attn_struct, config.transformer)
+            gno_config = OmegaConf.to_object(gno_config)
+            attn_config = OmegaConf.to_object(attn_config)
+
+            return LANO(
+                input_size=input_size,
+                output_size=output_size,
+                rigraph=rigraph,
+                gno_config=gno_config,
+                attn_config=attn_config,
+                regional_points=regional_points
+            )
+
+    else:
+        raise ValueError(f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno', 'lano'")
 

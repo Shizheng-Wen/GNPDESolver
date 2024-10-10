@@ -6,11 +6,18 @@ NS-Gauss/NS-PwC:
 1. 模型的效果表现的更好一些了，但仍旧是学习到一定阶段后无法收敛
 
 
+目前发起的实验：
+1. rfno的两个实验
+2. gino的两个实验
+3. 
+
 
 **待做:**- 
 - [x] 实现RFNO，这个模型至少可以用来快速测试我的训练是否make sense，使用相同的encoder和decoder配置，如果RFNO能够work的很好的话，那么RANO也应该work的很好。所以这也间接说明了model的参数初始化可能很重要。**running**
-- [ ] 实现LANO，这个模型可以用来测试一下我的训练是否make sense。
-- [ ]
+- [x] 实现LANO，这个模型可以用来测试一下我的训练是否make sense。
+    - [ ] 首先，对于processor进去的部分，应该用一个映射将数值扩大一下，不然其还是encoder输出的那个维度
+    - [ ] 没必要每一次都重新计算一次连接关系矩阵，直接存好，这个可以用我之前写的那段代码
+
 - [ ] 步进学习的策略就是max_time steps一开始不用取那么大，先用一个level，再逐步增大
 - [ ] 全resolution学习
 - [ ] 实现一下RscoT，也就是下载一下poseidon的模型参数，直接加载processor里面，然后在小数据上做微调
