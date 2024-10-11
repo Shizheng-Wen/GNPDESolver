@@ -148,3 +148,9 @@ MLP to do the projection.
 |node_latent_size| In the encoder, decoder, and MP (processor), the latent dimension of the node.|
 |edge_latent_size| the latent dimension of the edge.|
 |hidden_size| The hidden size layer for the edge_fn and node_fn (MLP)|
+
+
+
+## LANO
+encoder: input_size -> embedding (lifting size) -> GNOEncoder (lifting size)
+processor: lifting size -> Transformer

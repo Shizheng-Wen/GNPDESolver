@@ -65,7 +65,7 @@ class StaticTrainer(TrainerBase):
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
             self.x_train = self.x_train[:,:,:9216,:]
-        
+       
         active_vars = self.metadata.active_variables
         u_array = u_array[..., active_vars]
         self.num_input_channels = c_array.shape[-1]
@@ -102,25 +102,25 @@ class StaticTrainer(TrainerBase):
         self.u_mean = torch.tensor(u_mean, dtype=self.dtype)
         self.u_std = torch.tensor(u_std, dtype=self.dtype)
 
-        # # Normalize data using NumPy operations
-        # u_train = (u_train - u_mean) / u_std
-        # u_val = (u_val - u_mean) / u_std
-        # u_test = (u_test - u_mean) / u_std
+        # Normalize data using NumPy operations
+        u_train = (u_train - u_mean) / u_std
+        u_val = (u_val - u_mean) / u_std
+        u_test = (u_test - u_mean) / u_std
 
-        # # If c is used, compute statistics and normalize c
-        # if c_array is not None:
-        #     c_train_flat = c_train.reshape(-1, c_train.shape[-1])
-        #     c_mean = np.mean(c_train_flat, axis=0)
-        #     c_std = np.std(c_train_flat, axis=0) + EPSILON  # Avoid division by zero
+        # If c is used, compute statistics and normalize c
+        if c_array is not None:
+            c_train_flat = c_train.reshape(-1, c_train.shape[-1])
+            c_mean = np.mean(c_train_flat, axis=0)
+            c_std = np.std(c_train_flat, axis=0) + EPSILON  # Avoid division by zero
 
-        #     # Store statistics
-        #     self.c_mean = torch.tensor(c_mean, dtype=self.dtype)
-        #     self.c_std = torch.tensor(c_std, dtype=self.dtype)
+            # Store statistics
+            self.c_mean = torch.tensor(c_mean, dtype=self.dtype)
+            self.c_std = torch.tensor(c_std, dtype=self.dtype)
 
-        #     # Normalize c
-        #     c_train = (c_train - c_mean) / c_std
-        #     c_val = (c_val - c_mean) / c_std
-        #     c_test = (c_test - c_mean) / c_std
+            # Normalize c
+            c_train = (c_train - c_mean) / c_std
+            c_val = (c_val - c_mean) / c_std
+            c_test = (c_test - c_mean) / c_std
 
         self.x_train = torch.tensor(self.x_train, dtype=self.dtype).to(self.device)
         
@@ -165,6 +165,8 @@ class StaticTrainer(TrainerBase):
                 x_sample, y_sample = x_sample.to(self.device), y_sample.to(self.device) # Shape: [batch_size, num_timesteps, num_nodes, num_channels]
                 x_sample, y_sample = x_sample.squeeze(1), y_sample.squeeze(1)
                 pred = self.model(self.rigraph, x_sample)
+                pred_de_norm = pred * self.u_std.to(self.device) + self.u_mean.to(self.device)
+                y_sample_de_norm = y_sample * self.u_std.to(self.device) + self.u_mean.to(self.device)
                 relative_errors = compute_batch_errors(y_sample, pred, self.metadata)
                 all_relative_errors.append(relative_errors)
         all_relative_errors = torch.cat(all_relative_errors, dim=0)

@@ -225,12 +225,14 @@ class IntegralTransform(nn.Module):
         return out_features
 
 ############
-# GNO Encoder
+# GNO Encoder TODO: only for the batch data which share the same graph structure.
 ############
 class GNOEncoder(nn.Module):
     def __init__(self, in_channels, out_channels, gno_config):
         super().__init__()
         self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
+        self.gno_radius = gno_config.gno_radius
+        self.graph_cache = None 
 
         in_kernel_in_dim = gno_config.gno_coord_dim * 2
         if gno_config.in_gno_transform_type == "nonlinear" or gno_config.in_gno_transform_type == "nonlinear_kernelonly":
@@ -243,28 +245,34 @@ class GNOEncoder(nn.Module):
             transform_type=gno_config.in_gno_transform_type,
             use_torch_scatter=gno_config.gno_use_torch_scatter
         )
-        self.gno_radius = gno_config.gno_radius
+        
+        self.lifting = ChannelMLP(
+            in_channels = in_channels,
+            out_channels = out_channels,
+            n_layers= 1
+            )
 
     def forward(self, graph: RegionInteractionGraph, pndata: torch.Tensor) -> torch.Tensor:
         batch_size = pndata.shape[0]
-        input_geom = graph.physical_to_regional.src_ndata['pos'].to(pndata.device)
-        n_regional_nodes, dim = graph.physical_to_regional.dst_ndata['pos'].shape
-        n = int(torch.sqrt(torch.tensor(n_regional_nodes)))
+        if self.graph_cache is None:
+            self.input_geom = graph.physical_to_regional.src_ndata['pos'].to(pndata.device)
+            self.latent_queries = graph.physical_to_regional.dst_ndata['pos'].to(pndata.device)
 
-        latent_queries = graph.physical_to_regional.dst_ndata['pos'].view(n, n, dim).to(pndata.device) 
+            self.spatial_nbrs = self.nb_search(
+                self.input_geom,
+                self.latent_queries,
+                self.gno_radius
+            )
+            self.graph_cache = True
 
-
-        spatial_nbrs = self.nb_search(
-            input_geom,
-            latent_queries.view((-1, latent_queries.shape[-1])),
-            self.gno_radius
-        )
+        pndata = pndata.permute(0,2,1)
+        pndata = self.lifting(pndata).permute(0, 2, 1)  
 
         encoded = self.gno(
-            y=input_geom,
-            x=latent_queries.view((-1, latent_queries.shape[-1])),
+            y=self.input_geom,
+            x=self.latent_queries,
             f_y=pndata,
-            neighbors=spatial_nbrs
+            neighbors=self.spatial_nbrs
         ) # [batch_size, num_nodes, channels]
         return encoded
 
@@ -276,6 +284,9 @@ class GNODecoder(nn.Module):
     def __init__(self, in_channels, out_channels, gno_config):
         super().__init__()
         self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
+        self.gno_radius = gno_config.gno_radius
+        self.graph_cache = None
+
         out_kernel_in_dim = gno_config.gno_coord_dim * 2
         out_kernel_in_dim += out_channels if gno_config.out_gno_transform_type != 'linear' else 0
         gno_config.out_gno_channel_mlp_hidden_layers.insert(0, out_kernel_in_dim)
@@ -286,8 +297,7 @@ class GNODecoder(nn.Module):
             transform_type=gno_config.out_gno_transform_type,
             use_torch_scatter=gno_config.gno_use_torch_scatter
         )
-        self.gno_radius = gno_config.gno_radius
-
+        
         self.projection = ChannelMLP(
             in_channels = in_channels,
             out_channels = out_channels,
@@ -296,26 +306,24 @@ class GNODecoder(nn.Module):
             n_dim=1,
         )
 
-
-
     def forward(self, graph: RegionInteractionGraph, rndata: torch.Tensor) -> torch.Tensor:
         batch_size = rndata.shape[0]
-        input_geom = graph.regional_to_physical.src_ndata['pos'].to(rndata.device)
-        n_regional_nodes, dim = graph.regional_to_physical.dst_ndata['pos'].shape
-        n = int(torch.sqrt(torch.tensor(n_regional_nodes)))
 
-        latent_queries = graph.regional_to_physical.dst_ndata['pos'].view(n, n, dim).to(rndata.device) 
+        if self.graph_cache is None:
 
-        spatial_nbrs = self.nb_search(
-            input_geom,
-            latent_queries.view((-1, latent_queries.shape[-1])),
-            self.gno_radius
-        )
+            self.input_geom = graph.regional_to_physical.src_ndata['pos'].to(rndata.device)
+            self.latent_queries = graph.regional_to_physical.dst_ndata['pos'].to(rndata.device) 
+
+            self.spatial_nbrs = self.nb_search(
+                self.input_geom,
+                self.latent_queries,
+                self.gno_radius
+            )
         decoded = self.gno(
-            y=input_geom,
-            x=latent_queries.view((-1, latent_queries.shape[-1])),
+            y=self.input_geom,
+            x=self.latent_queries,
             f_y=rndata,
-            neighbors=spatial_nbrs
+            neighbors=self.spatial_nbrs
         )
 
         decoded = decoded.permute(0,2,1)

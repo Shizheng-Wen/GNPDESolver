@@ -1,0 +1,121 @@
+{  
+    "setup": {
+        "seed": 42,
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "trainer_name": "static",
+        "train": true,
+        "test" : false,
+        "ckpt": false,
+        "use_variance_test": false
+    },
+
+    "graph": {
+        "periodic": false,
+        "sample_factor": 0.5,
+        "overlap_factor_p2r": 1,
+        "overlap_factor_r2p": 1,
+        "regional_level": 1,
+        "add_dummy_node": false,
+        "with_additional_info": true,
+        "regional_points": [64, 64]
+    },
+
+    "model": {
+        "name": "rano",
+        "drop_edge": 0.0,
+        "use_conditional_norm": false,
+        "variable_mesh": false,
+        "args":{
+            "patch_size": 2,
+            "deepgnn": {
+                "node_latent_size": 16,
+                "edge_latent_size": 16,
+                "num_message_passing_steps": 3,
+                "use_node_encode": true,
+                "use_edge_encode": true,
+                "use_node_decode": true,
+                "use_edge_decode": true,
+                "mpconfig": {
+                    "aggregate": "mean",
+                    "aggregate_normalization": null,
+                    "use_node_fn": true,
+                    "use_edge_fn": true,
+                    "edge_fn_config": {
+                        "hidden_size": 16,
+                        "num_layers": 3,
+                        "activation": "swish",
+                        "use_layer_norm": true,
+                        "use_conditional_norm": false,
+                        "cond_norm_hidden_size": 4
+                    },
+                    "node_fn_config": {
+                        "hidden_size": 16,
+                        "num_layers": 3,
+                        "activation": "swish",
+                        "use_layer_norm": true,
+                        "use_conditional_norm": false,
+                        "cond_norm_hidden_size": 4
+                    }
+                }
+            },
+            "transformer": {
+                "hidden_size": 256,
+                "use_attn_norm": true,
+                "use_ffn_norm": true,
+                "norm_eps": 1e-6,
+                "num_layers": 3,
+                "attn_config": {
+                    "hidden_size": 256,
+                    "num_heads": 8,
+                    "num_kv_heads": 8,
+                    "use_conditional_norm": false,
+                    "cond_norm_hidden_size": 4
+                },
+                "ffn_config": {
+                    "hidden_size": 256,
+                    "use_conditional_norm": false,
+                    "cond_norm_hidden_size": 4      
+                }
+            }
+        }
+    },
+
+    "dataset": {
+        "name": "poisson_c_sines",
+        "metaname": "rigno-unstructured/poisson_c_sines",
+        "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
+        "train_size": 2048,
+        "val_size": 128,
+        "test_size": 256,
+        "batch_size": 64,
+        "num_workers": 4,
+        "shuffle": true,
+        "latent_queries": [64, 64]
+    },
+
+    "optimizer": {
+        "name": "adam",
+        "args": {
+            "lr": 1e-3,
+            "epoch": 500,
+            "batch_size": 32,
+            "loss_scale": 1.0,
+            "eval_every_eps": 2,
+            "scheduler": "step",
+            "scheduler_step_size": 100,
+            "scheduler_gamma": 0.8,
+            "scheduler_T_max": 100,
+            "scheduler_eta_min": 1e-4
+        }
+    },
+
+    "path": {
+        "ckpt_path":".ckpt/rano/poisson_c_sines.pt",
+        "loss_path":".loss/rano/poisson_c_sines",
+        "result_path":".results/rano/poisson_c_sines.png",
+        "database_path":".database/rano/poisson_c_sines.csv"
+    }
+}   
+                
+            
