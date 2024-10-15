@@ -7,6 +7,7 @@ from .rano import RANO
 from .gino import GINO, GINOConfig
 from .rfno import RFNO
 from .lano import LANO
+from .lano_batch import LANOBATCH
 
 
 from .p2r2p import Physical2Regional2Physical
@@ -33,7 +34,7 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
                             config:dataclass = None
                             )->Union[Physical2Regional2Physical, RANO, GINO]:
     
-    assert model.lower() in ["rigno", "rano", "gino", "rfno", "lano"], f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno', 'lano'. "
+    assert model.lower() in ["rigno", "rano", "gino", "rfno", "lano", "lano_batch"], f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno', 'lano'. "
     
     deepgnn_struct = OmegaConf.structured(DeepGraphNNConfig)
     attn_struct = OmegaConf.structured(TransformerConfig)
@@ -123,6 +124,28 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
             attn_config = OmegaConf.to_object(attn_config)
 
             return LANO(
+                input_size=input_size,
+                output_size=output_size,
+                rigraph=rigraph,
+                gno_config=gno_config,
+                attn_config=attn_config,
+                regional_points=regional_points
+            )
+    
+    elif model.lower() == 'lano_batch':
+        if config is None:
+            return LANOBATCH(
+                input_size = input_size,
+                output_size = output_size,
+                rigraph = rigraph,
+            )
+        else:
+            gno_config = OmegaConf.merge(gno_struct, config.gno)
+            attn_config = OmegaConf.merge(attn_struct, config.transformer)
+            gno_config = OmegaConf.to_object(gno_config)
+            attn_config = OmegaConf.to_object(attn_config)
+
+            return LANOBATCH(
                 input_size=input_size,
                 output_size=output_size,
                 rigraph=rigraph,

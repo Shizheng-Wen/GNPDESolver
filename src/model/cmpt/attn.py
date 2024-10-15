@@ -82,6 +82,9 @@ class GroupQueryAttention(nn.Module):
         -------
         torch.Tensor, shape (..., seq_len, output_size)
         """
+        if self.correction is not None:
+            x = self.correction(x, condition = condition)
+
         q = self.q_proj(x)
         k = self.k_proj(x)
         v = self.v_proj(x)
@@ -104,9 +107,6 @@ class GroupQueryAttention(nn.Module):
         x = x.transpose(-3,-2) #  (..., seq_len, num_heads, head_dim)
         x = x.contiguous().view(x.shape[:-2] + (-1,)) # (..., seq_len, hidden_size)
         x = self.o_proj(x)
-
-        if self.correction is not None:
-            x = self.correction(x, condition = condition)
 
         return x
 
@@ -158,7 +158,9 @@ class GroupQueryFlashAttention(nn.Module):
         """
         # 
         #x = x.to(self.attn_dtype)
-
+        if self.correction is not None:
+            x = self.correction(c=condition, x=x)
+        
         q = self.q_proj(x)
         k = self.k_proj(x)
         v = self.v_proj(x)
@@ -177,9 +179,7 @@ class GroupQueryFlashAttention(nn.Module):
 
         x = x.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
         x = self.o_proj(x)
-        if self.correction is not None:
-            x = self.correction(c=condition, x=x)
-
+        
         return x
 
     @classmethod

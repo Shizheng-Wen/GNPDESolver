@@ -6,12 +6,13 @@ from dataclasses import dataclass, field
 
 from .p2r2p import Physical2Regional2Physical
 from .cmpt.attn import Transformer, TransformerConfig
-from .cmpt.gno import IntegralTransform, GNOConfig, GNOEncoder, GNODecoder
+from .cmpt.gno import IntegralTransform, GNOConfig
+from .cmpt.gno_batch import GNOEncoder, GNODecoder
 from .cmpt.utils.gno_utils import NeighborSearch
 from ..graph import RegionInteractionGraph, Graph
 
 
-class LANO(Physical2Regional2Physical):
+class LANOBATCH(Physical2Regional2Physical):
     """
     LANO: Graph Neural Operator + Vision Transformer + Graph Neural Operator
     """
@@ -33,6 +34,8 @@ class LANO(Physical2Regional2Physical):
         self.patch_size = patch_size
         self.H = regional_points[0]
         self.W = regional_points[1]
+
+        self.batch_latent_queries = None
 
         # Initialize encoder, processor, and decoder
         self.encoder = self.init_encoder(input_size, rigraph, gno_config)
@@ -66,9 +69,9 @@ class LANO(Physical2Regional2Physical):
             gno_config=gno_config
         )
 
-    def encode(self, graph: RegionInteractionGraph, pndata: torch.Tensor) -> torch.Tensor:
+    def encode(self, x: torch.Tensor, latent_queries: torch.Tensor, pndata: torch.Tensor) -> torch.Tensor:
         # Apply GNO encoder
-        encoded = self.encoder(graph, pndata)
+        encoded = self.encoder(x, latent_queries, pndata)
         return encoded
 
     def process(self, graph: Graph,
@@ -121,23 +124,26 @@ class LANO(Physical2Regional2Physical):
 
         return rndata
 
-    def decode(self, graph: RegionInteractionGraph, rndata: torch.Tensor) -> torch.Tensor:
+    def decode(self, x: torch.Tensor, latent_queries: torch.Tensor, rndata: torch.Tensor) -> torch.Tensor:
         # Apply GNO decoder
-        decoded = self.decoder(graph, rndata)
+        decoded = self.decoder(x, latent_queries, rndata)
         return decoded
 
     def forward(self,
                 graphs: RegionInteractionGraph,
+                xcoord: Optional[torch.Tensor] = None,
                 pndata: Optional[torch.Tensor] = None,
                 condition: Optional[float] = None
                 ) -> torch.Tensor:
         """
-        Forward pass for LANO model.
+        Forward pass for GIVI model.
 
         Parameters
         ----------
         graphs: RegionInteractionGraph
             The graphs representing the interactions.
+        xcoord: Optional[torch.Tensor]
+            ND Tensor of shape [batch_size, n_physical_nodes, n_dim]
         pndata: Optional[torch.Tensor]
             ND Tensor of shape [batch_size, n_physical_nodes, input_size]
         condition: Optional[float]
@@ -148,14 +154,19 @@ class LANO(Physical2Regional2Physical):
         torch.Tensor
             The output tensor of shape [batch_size, n_physical_nodes, output_size]
         """
+        if self.batch_latent_queries == None:
+            batch_size = pndata.shape[0]
+            latent_queries = graphs.physical_to_regional.dst_ndata['pos'].to(pndata.device)
+            self.batch_latent_queries = latent_queries.unsqueeze(0).repeat(batch_size, 1, 1)
+    
         # Encode: Map physical nodes to regional nodes using GNO Encoder
-        rndata = self.encode(graphs, pndata)
+        rndata = self.encode(xcoord, self.batch_latent_queries, pndata)
 
         # Process: Apply Vision Transformer on the regional nodes
         rndata = self.process(graphs.regional_to_regional, rndata, condition)
 
         # Decode: Map regional nodes back to physical nodes using GNO Decoder
-        output = self.decode(graphs, rndata)
+        output = self.decode(self.batch_latent_queries, xcoord, rndata)
 
         return output
 

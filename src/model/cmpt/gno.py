@@ -257,7 +257,6 @@ class GNOEncoder(nn.Module):
         if self.graph_cache is None:
             self.input_geom = graph.physical_to_regional.src_ndata['pos'].to(pndata.device)
             self.latent_queries = graph.physical_to_regional.dst_ndata['pos'].to(pndata.device)
-
             self.spatial_nbrs = self.nb_search(
                 self.input_geom,
                 self.latent_queries,

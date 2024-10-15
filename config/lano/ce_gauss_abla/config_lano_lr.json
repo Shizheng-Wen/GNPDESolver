@@ -4,8 +4,8 @@
         "device": "cuda:0",
         "dtype": "torch.float32",
         "trainer_name": "sequential",
-        "train": true,
-        "test" : false,
+        "train": false,
+        "test" : true,
         "ckpt": false,
         "use_variance_test": false
     },
@@ -33,7 +33,7 @@
                 "projection_channels": 256,
                 "in_gno_channel_mlp_hidden_layers": [64, 64, 64],
                 "out_gno_channel_mlp_hidden_layers": [64, 64],
-                "lifting_channels": 256,
+                "lifting_channels": 16,
                 "gno_radius": 0.033
             },
             "transformer": {
@@ -62,6 +62,7 @@
         "name": "CE-Gauss",
         "metaname": "rigno-unstructured/CE-Gauss",
         "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
+        "use_metadata_stats": false,
         "train_size": 1024,
         "val_size": 128,
         "test_size": 256,
@@ -71,7 +72,7 @@
         "shuffle": true,
         "latent_queries": [64, 64],
         "metric": "final_step",
-        "predict_mode": "autoregressive"
+        "predict_mode": "all"
     },
 
     "optimizer": {

@@ -6,7 +6,7 @@
         "trainer_name": "sequential",
         "train": true,
         "test" : false,
-        "ckpt": false,
+        "ckpt": true,
         "use_variance_test": false
     },
 
@@ -33,7 +33,7 @@
                 "projection_channels": 256,
                 "in_gno_channel_mlp_hidden_layers": [64, 64, 64],
                 "out_gno_channel_mlp_hidden_layers": [64, 64],
-                "lifting_channels": 256,
+                "lifting_channels": 16,
                 "gno_radius": 0.033
             },
             "transformer": {
@@ -71,22 +71,22 @@
         "shuffle": true,
         "latent_queries": [64, 64],
         "metric": "final_step",
-        "predict_mode": "autoregressive"
+        "predict_mode": "all"
     },
 
     "optimizer": {
-        "name": "adam",
+        "name": "adamw",
         "args": {
-            "lr": 1e-3,
+            "lr": 1e-5,
+            "weight_decay": 1e-5,
             "epoch": 1000,
             "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
-            "scheduler": "step",
-            "scheduler_step_size": 100,
-            "scheduler_gamma": 0.8,
-            "scheduler_T_max": 100,
-            "scheduler_eta_min": 1e-4
+            "scheduler": "mix",
+            "max_lr": 2e-5,
+            "min_lr": 1e-6,
+            "final_lr": 5e-7
         }
     },
 

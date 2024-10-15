@@ -13,7 +13,7 @@ import subprocess
 import platform
 
 from src.trainer.seq import SequentialTrainer
-from src.trainer.stat import StaticTrainer
+from src.trainer.stat import StaticTrainer,StaticTrainer_unstructured, StaticTrainer_test, StaticTrainer_unstructured
 
 def parse_args(parser):
     # Trainer setup
@@ -214,10 +214,14 @@ def run_arg(arg):
     arg.datarow['training time'] = np.nan
     arg.datarow['inference time'] = np.nan
     arg.datarow['time']    = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    arg.datarow['relative error (poseidon_metric)'] = np.nan
+    arg.datarow['relative error (direct)'] = np.nan
+    arg.datarow['relative error (auto2)'] = np.nan
+    arg.datarow['relative error (auto4)'] = np.nan
     Trainer = {
         "sequential": SequentialTrainer,
         "static": StaticTrainer,
+        "static_unstruc": StaticTrainer_unstructured,
+        "static_test": StaticTrainer_test,
     }[arg.setup["trainer_name"]]
     t = Trainer(arg)
     if arg.setup["train"]:

@@ -4,9 +4,9 @@
         "device": "cuda:1",
         "dtype": "torch.float32",
         "trainer_name": "static",
-        "train": false,
-        "test" : true,
-        "ckpt": false,
+        "train": true,
+        "test" : false,
+        "ckpt": true,
         "use_variance_test": false
     },
 
@@ -74,16 +74,16 @@
     "optimizer": {
         "name": "adamw",
         "args": {
-            "lr": 1e-4,
+            "lr": 1e-5,
             "weight_decay": 1e-5,
             "epoch": 1000,
             "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
             "scheduler": "mix",
-            "max_lr": 5e-4,
-            "min_lr": 1e-5,
-            "final_lr": 5e-6
+            "max_lr": 5e-5,
+            "min_lr": 1e-6,
+            "final_lr": 5e-7
         }
     },
 

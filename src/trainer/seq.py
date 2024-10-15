@@ -95,7 +95,10 @@ class SequentialTrainer(TrainerBase):
         # Store statistics as torch tensors
         self.u_mean = torch.tensor(u_mean, dtype=self.dtype)
         self.u_std = torch.tensor(u_std, dtype=self.dtype)
-
+        
+        if dataset_config.use_metadata_stats:
+            self.u_mean = torch.tensor(self.metadata.global_mean, dtype=self.dtype)
+            self.u_std = torch.tensor(self.metadata.global_std, dtype=self.dtype)
         # Normalize data using NumPy operations
         u_train = (u_train - u_mean) / u_std
         u_val = (u_val - u_mean) / u_std
@@ -281,54 +284,110 @@ class SequentialTrainer(TrainerBase):
         self.model.eval()
         self.model.to(self.device)
         self.model.drop_edge = 0.0
-        all_relative_errors = []
-        if self.dataset_config["predict_mode"] == "autoregressive":
-            time_indices = np.arange(0, 15, 2) # [0, 2, 4, ..., 14]
-        elif self.dataset_config["predict_mode"] == "direct":
-            time_indices = np.array([0,14])
+
+        if self.dataset_config["predict_mode"] == "all":
+            modes = ["autoregressive", "direct", "star"]
+        else:
+            modes = [self.dataset_config["predict_mode"]]
+
+        errors_dict = {}
+        example_data = None # To store for plotting
+
+        for mode in modes:
+            all_relative_errors = []
+            if mode == "autoregressive":
+                time_indices = np.arange(0, 15, 2)  # [0, 2, 4, ..., 14]
+            elif mode == "direct":
+                time_indices = np.array([0, 14])
+            elif mode == "star":
+                time_indices = np.array([0, 4, 8, 12, 14])
+            else:
+                raise ValueError(f"Unknown predict_mode: {mode}")
+    
+            test_dataset = TestDataset(
+                u_data = self.test_dataset.u_data,
+                c_data = self.test_dataset.c_data,
+                t_values = self.test_dataset.t_values,
+                metadata = self.metadata,
+                time_indices = time_indices
+            )
+
+            # TEST = True
+            # if TEST:
+            #     test_dataset = TestDataset(
+            #         u_data = self.train_dataset.u_data,
+            #         c_data = self.train_dataset.c_data,
+            #         t_values = self.train_dataset.t_values,
+            #         metadata = self.metadata,
+            #         time_indices = time_indices
+            #         )
+
+            test_loader = DataLoader(
+                test_dataset,
+                batch_size=self.test_loader.batch_size,
+                shuffle=False,
+                num_workers=self.test_loader.num_workers,
+                collate_fn=self.collate_fn
+            )
+
+            pbar = tqdm(total=len(test_loader), desc=f"Testing ({mode})", colour="blue")
+            with torch.no_grad():
+                for i, (x_batch, y_batch) in enumerate(test_loader):
+                    # TODO: Figure out whether from CPU to GPU is the compuation bottleneck
+                    x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
+                    pred = self.autoregressive_predict(x_batch, time_indices) # Shape: [batch_size, num_timesteps - 1, num_nodes, num_channels]
+                    pred_de_norm = pred * self.u_std.to(self.device) + self.u_mean.to(self.device)
+                    y_batch_de_norm = y_batch * self.u_std.to(self.device) + self.u_mean.to(self.device)
+                    if self.dataset_config["metric"] == "final_step":
+                        relative_errors = compute_batch_errors(
+                            y_batch_de_norm[:,-1,:,:][:,None,:,:], 
+                            pred_de_norm[:,-1,:,:][:,None,:,:], 
+                            self.metadata)
+                    elif self.dataset_config["metric"] == "all_step":
+                        relative_errors = compute_batch_errors(
+                            y_batch_de_norm, 
+                            pred_de_norm, 
+                            self.metadata)
+                    else:
+                        raise ValueError(f"Unknown metric: {self.dataset_config['metric']}")
+                    all_relative_errors.append(relative_errors)
+                    pbar.update(1)
+                    # Store example data for plotting (only once)
+                    if example_data is None:
+                        example_data = {
+                            'coords': self.x_train[0, 0].cpu().numpy(),
+                            'gt_sequence': y_batch_de_norm[0].cpu().numpy(),
+                            'pred_sequence': pred_de_norm[0].cpu().numpy(),
+                            'time_indices': time_indices,
+                            't_values': self.test_dataset.t_values
+                        }
+
+                pbar.close()
+
+            all_relative_errors = torch.cat(all_relative_errors, dim=0)
+            final_metric = compute_final_metric(all_relative_errors)
+            errors_dict[mode] = final_metric
+        print(errors_dict)
+        if self.dataset_config["predict_mode"] == "all":
+            self.config.datarow["relative error (direct)"] = errors_dict["direct"]
+            self.config.datarow["relative error (auto2)"] = errors_dict["autoregressive"]
+            self.config.datarow["relative error (auto4)"] = errors_dict["star"]
+        else:
+            mode = self.dataset_config["predict_mode"]
+            self.config.datarow[f"relative error ({mode})"] = errors_dict[mode]
+
+        if example_data is not None:
+            self.plot_results(
+                coords=example_data['coords'],
+                gt_sequence=example_data['gt_sequence'],
+                pred_sequence=example_data['pred_sequence'],
+                time_indices=example_data['time_indices'],
+                t_values=example_data['t_values'],
+                num_frames=5
+            )
         
-        test_dataset = TestDataset(
-            u_data = self.test_dataset.u_data,
-            c_data = self.test_dataset.c_data,
-            t_values = self.test_dataset.t_values,
-            metadata = self.metadata,
-            time_indices = time_indices
-        )
-
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=self.test_loader.batch_size,
-            shuffle=False,
-            num_workers=self.test_loader.num_workers,
-            collate_fn=self.collate_fn
-        )
-
-        pbar = tqdm(total=len(test_loader), desc="Testing", colour="blue")
-        with torch.no_grad():
-            for i, (x_batch, y_batch) in enumerate(test_loader):
-                # TODO: Figure out whether from CPU to GPU is the compuation bottleneck
-                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
-                pred = self.autoregressive_predict(x_batch, time_indices) # Shape: [batch_size, num_timesteps - 1, num_nodes, num_channels]
-                pred_de_norm = pred * self.u_std.to(self.device) + self.u_mean.to(self.device)
-                y_batch_de_norm = y_batch * self.u_std.to(self.device) + self.u_mean.to(self.device)
-                if self.dataset_config["metric"] == "final_step":
-                    relative_errors = compute_batch_errors(y_batch_de_norm[:,-2:-1,:,:], pred_de_norm[:,-2:-1,:,:], self.metadata)
-                elif self.dataset_config["metric"] == "all_step":
-                    relative_errors = compute_batch_errors(y_batch_de_norm, pred_de_norm, self.metadata)
-                all_relative_errors.append(relative_errors)
-                pbar.update(1)
-        pbar.close()
-        all_relative_errors = torch.cat(all_relative_errors, dim=0)
-        final_metric = compute_final_metric(all_relative_errors)
-        self.config.datarow["relative error (poseidon_metric)"] = final_metric
-        self.plot_results(
-            coords=self.x_train[0,0].cpu().numpy(),
-            gt_sequence=y_batch_de_norm[0].cpu().numpy(),
-            pred_sequence=pred_de_norm[0].cpu().numpy(),
-            time_indices=time_indices,
-            t_values=self.test_dataset.t_values,
-            num_frames=5
-        )
+        if self.setup_config.measure_inf_time:
+            self.measure_inference_time()
 
     def plot_results(self, coords, gt_sequence, pred_sequence, time_indices, t_values, num_frames=5):
         """
@@ -431,7 +490,10 @@ class SequentialTrainer(TrainerBase):
             times = []
             for _ in range(10):
                 start_time = time.perf_counter()
-                pred = self.model(self.rigraph, x_sample)
+                if self.model_config.use_conditional_norm:
+                    pred = self.model(self.rigraph, x_sample[...,:-1], x_sample[...,0,-2:-1])
+                else:
+                    pred = self.model(self.rigraph, x_sample)
                 # Ensure all CUDA kernels have finished before stopping the timer
                 if 'cuda' in str(self.device):
                     torch.cuda.synchronize()

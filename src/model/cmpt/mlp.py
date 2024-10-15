@@ -44,13 +44,18 @@ class MLP(nn.Module):
                  num_layers:int = 3,
                  activation:str="swish"):
         super().__init__()
-        self.layers = nn.ModuleList([
-            nn.Linear(input_size, hidden_size),
-        ])
-        for _  in range(num_layers-2):
-            self.layers.append(nn.Linear(hidden_size, hidden_size))
-        self.layers.append(nn.Linear(hidden_size, output_size))
-        self.act  = activation_fn(activation)
+        if num_layers <= 2:
+            self.layers = nn.ModuleList([
+                nn.Linear(input_size, output_size)
+            ])
+        else:
+            self.layers = nn.ModuleList([
+                nn.Linear(input_size, hidden_size)
+            ])
+            for _ in range(num_layers - 2):
+                self.layers.append(nn.Linear(hidden_size, hidden_size))
+            self.layers.append(nn.Linear(hidden_size, output_size))
+        self.act = activation_fn(activation)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -86,12 +91,12 @@ class ConditionedNorm(nn.Module):
                              output_size,
                              hidden_size,
                              num_layers=2,
-                             activation="sigmoid")
+                             activation="none")
         self.mlp_bias = MLP(input_size,
                             output_size,
                             hidden_size,
                             num_layers=2,
-                            activation="sigmoid")
+                            activation="none")
         self.reset_parameters()
     def reset_parameters(self):
         for layer in self.mlp_scale.layers:
@@ -107,6 +112,7 @@ class ConditionedNorm(nn.Module):
         ----------
         c:torch.Tensor
             The conditional input, often time. 
+            [batch_size, 1]
         x:torch.Tensor
             The input tensor
         """

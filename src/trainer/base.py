@@ -3,9 +3,11 @@ import torch.nn as nn
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from omegaconf import OmegaConf
 
 from .optimizers import AdamOptimizer, AdamWOptimizer
 from .utils import manual_seed, load_ckpt, save_ckpt, compute_batch_errors, compute_final_metric
+from .utils import SetUpConfig, GraphConfig, DatasetConfig
 from ..data.dataset import Metadata, DATASET_METADATA
 
 class TrainerBase:
@@ -17,6 +19,11 @@ class TrainerBase:
     ----------
     """
     def __init__(self, args):
+        #construct setup
+        setupconfig_struct = OmegaConf.structured(SetUpConfig)
+        graphconfig_struct = OmegaConf.structured(GraphConfig)
+        datasetconfig_struct = OmegaConf.structured(DatasetConfig)
+
         # Config setup
         self.config = args
         self.setup_config = self.config.setup
@@ -28,6 +35,9 @@ class TrainerBase:
 
         self.metadata = DATASET_METADATA[self.dataset_config["metaname"]]
 
+        self.setup_config = OmegaConf.merge(setupconfig_struct,self.setup_config)
+        self.graph_config = OmegaConf.merge(graphconfig_struct,self.graph_config)
+        self.dataset_config = OmegaConf.merge(datasetconfig_struct,self.dataset_config)
         self.device = self.setup_config.device
         manual_seed(self.setup_config.seed)
         if self.setup_config.dtype == "float" or \
@@ -131,7 +141,7 @@ class TrainerBase:
         self.save_ckpt()
 
         if len(result['train']['loss'])==0:
-            if self.config.use_variance_test:
+            if self.setup_config.use_variance_test:
                 self.variance_test()
             else:
                 self.test()
@@ -153,7 +163,7 @@ class TrainerBase:
                 **kwargs
             )
 
-            if self.setup_config["use_variance_test"]:
+            if self.setup_config.use_variance_test:
                 self.variance_test()
             else:
                 self.test()

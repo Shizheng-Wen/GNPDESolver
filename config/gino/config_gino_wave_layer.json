@@ -3,15 +3,29 @@
         "seed": 42,
         "device": "cuda:0",
         "dtype": "torch.float32",
-        "trainer_name": "dynamic",
+        "trainer_name": "sequential",
         "train": false,
         "test" : true,
         "ckpt": false,
         "use_variance_test": false
     },
 
+    "graph": {
+        "periodic": false,
+        "sample_factor": 0.5,
+        "overlap_factor_p2r": 1,
+        "overlap_factor_r2p": 1,
+        "regional_level": 1,
+        "add_dummy_node": false,
+        "with_additional_info": true,
+        "regional_points": [64, 64]
+    },
+
     "model": {
         "name": "gino",
+        "drop_edge": 0.0,
+        "use_conditional_norm": false,
+        "variable_mesh": false,
         "args": {
             "gno_coord_dim": 2,
             "projection_channels": 256,
@@ -36,8 +50,8 @@
         "num_workers": 4,
         "shuffle": true,
         "latent_queries": [64, 64],
-        "metric": "all_step",
-        "predict_mode": "direct"
+        "metric": "final_step",
+        "predict_mode": "all"
     },
 
     "optimizer": {

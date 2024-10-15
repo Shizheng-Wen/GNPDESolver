@@ -4,10 +4,14 @@
 .loss/
 .ckpt/
 .database/
-
+.database_old/
 .vscode/
 
 
 **__pycache__**
 
 slurmjob/
+
+config/*
+!config/tpl/
+!config/tpl/**
