@@ -1,25 +1,21 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Literal
+import scipy
 import numpy as np
+from typing import Literal
+from memory_profiler import profile
+import sys
+sys.path.append("../")
+from src.model.cmpt.mlp import LinearChannelMLP
+from src.model.cmpt.gno import IntegralTransform
 
 
-from .mlp import LinearChannelMLP, ChannelMLP
-from ...utils.scale import rescale
+from src.model.cmpt.utils.gno_utils import NeighborSearch, segment_csr
+from src.model.cmpt.utils.gno_utils import native_neighbor_search as native_neighbor_search_batch
 
-from .utils.gno_utils import Activation, segment_csr, NeighborSearch
-from .gno import IntegralTransform
-
-
-"""
-This code is beta version, the final version will be integrated into the gno.py
-
-I have droped the NeighborSearch_batch and IntegralTransformBatch. Because it is not a big 
-for loop, we can use loop to reduce the peak of memory usage.
-"""
 ##########
-# batchNeighborSearch --->
+# batchNeighborSearch
 ##########
 class NeighborSearch_batch(nn.Module):
     """
@@ -95,30 +91,19 @@ def native_neighbor_search(data: torch.Tensor, queries: torch.Tensor, radius: fl
     n_batch, n, d = data.shape
     m = queries.shape[1]
 
-    # Compute pairwise distances between queries and data
     dists = torch.cdist(queries, data)  # Shape: [n_batch, m, n]
 
-    # Determine neighbor relationships
     in_nbr = dists <= radius  # Shape: [n_batch, m, n], bool tensor
-
-    # Count number of neighbors per query point
     num_neighbors_per_query = in_nbr.sum(dim=2)  # Shape: [n_batch, m]
-
-    # Compute maximum number of neighbors per query across the entire batch
     max_num_neighbors = num_neighbors_per_query.max().item()
-
-    # Prepare neighbor indices with padding
     data_indices = torch.arange(n, device=data.device).view(1, 1, n).expand(n_batch, m, n)
     neighbors_index = torch.full((n_batch, m, max_num_neighbors), -1, device=data.device, dtype=torch.long)
 
-    # Mask data indices where in_nbr is False
     valid_indices = data_indices * in_nbr.long() + (~in_nbr).long() * (n)
     sorted_indices, _ = torch.sort(valid_indices, dim=2)
     neighbors_index[:, :, :max_num_neighbors] = sorted_indices[:, :, :max_num_neighbors]
     neighbors_index[neighbors_index == n] = -1  # Replace padding indices with -1
 
-    # Compute neighbors_row_splits
-    # Since we have padded neighbors_index, row_splits can be derived from num_neighbors_per_query
     neighbors_row_splits = torch.cat([
         torch.zeros((n_batch, 1), device=data.device, dtype=torch.long),
         num_neighbors_per_query.cumsum(dim=1)
@@ -205,147 +190,7 @@ def open3d_neighbor_search(data: torch.Tensor, queries: torch.Tensor, radius: fl
     }
     return nbr_dict
 
-def native_neighbor_search__(data: torch.Tensor, queries: torch.Tensor, radius: float, q_chunk_size=1024):
-    n_batch, n, d = data.shape
-    m = queries.shape[1]
 
-    neighbors_index_list = []
-    num_neighbors_per_query_list = []
-
-    # Change data type to int32 for indices
-    data_indices = torch.arange(n, device=data.device, dtype=torch.int32).view(1, 1, n)
-
-    max_num_neighbors = 0
-
-    for start in range(0, m, q_chunk_size):
-        end = min(start + q_chunk_size, m)
-        queries_chunk = queries[:, start:end, :]  # Shape: [n_batch, q_chunk_size, d]
-
-        # Compute pairwise distances between queries_chunk and data
-        dists = torch.cdist(queries_chunk, data)  # Shape: [n_batch, q_chunk_size, n]
-
-        # Determine neighbor relationships
-        in_nbr = dists <= radius  # Shape: [n_batch, q_chunk_size, n], bool tensor
-
-        # Count number of neighbors per query point
-        num_neighbors_per_query = in_nbr.sum(dim=2)  # Shape: [n_batch, q_chunk_size]
-        num_neighbors_per_query_list.append(num_neighbors_per_query)
-
-        max_num_neighbors_chunk = num_neighbors_per_query.max().item()
-        max_num_neighbors = max(max_num_neighbors, max_num_neighbors_chunk)
-
-        # Prepare neighbor indices with padding
-        data_indices_chunk = data_indices.expand(n_batch, end - start, n)
-        valid_indices = torch.where(in_nbr, data_indices_chunk, n)
-        sorted_indices, _ = torch.sort(valid_indices, dim=2)
-        neighbors_index_chunk = sorted_indices[:, :, :max_num_neighbors_chunk]
-        neighbors_index_chunk[neighbors_index_chunk == n] = -1  # Replace padding indices with -1
-
-        # Change indices to int32
-        neighbors_index_chunk = neighbors_index_chunk.int()
-
-        # Pad to max_num_neighbors across all chunks
-        if neighbors_index_chunk.shape[2] < max_num_neighbors:
-            pad_size = max_num_neighbors - neighbors_index_chunk.shape[2]
-            neighbors_index_chunk = torch.cat(
-                [neighbors_index_chunk, torch.full((n_batch, end - start, pad_size), -1, device=data.device, dtype=torch.int32)],
-                dim=2
-            )
-
-        neighbors_index_list.append(neighbors_index_chunk)
-
-    # Concatenate results from all chunks
-    neighbors_index = torch.cat(neighbors_index_list, dim=1)  # Shape: [n_batch, m, max_num_neighbors]
-    num_neighbors_per_query = torch.cat(num_neighbors_per_query_list, dim=1)  # Shape: [n_batch, m]
-
-    # Compute neighbors_row_splits
-    neighbors_row_splits = torch.cat([
-        torch.zeros((n_batch, 1), device=data.device, dtype=torch.int32),
-        num_neighbors_per_query.cumsum(dim=1)
-    ], dim=1)  # Shape: [n_batch, m+1]
-
-    nbr_dict = {
-        'neighbors_index': neighbors_index,          # Shape: [n_batch, m, max_num_neighbors]
-        'neighbors_row_splits': neighbors_row_splits  # Shape: [n_batch, m+1]
-    }
-    return nbr_dict
-
-@torch.no_grad()
-def native_neighbor_search___(data: torch.Tensor, queries: torch.Tensor, radius: float, q_chunk_size=1024):
-    n_batch, n, d = data.shape
-    m = queries.shape[1]
-
-    neighbors_index_list_unpadded = []
-    num_neighbors_per_query_list = []
-
-    # Precompute data indices
-    data_indices = torch.arange(n, device=data.device, dtype=torch.long).view(1, 1, n)
-
-    max_num_neighbors = 0  # Global maximum number of neighbors across all queries
-
-    for start in range(0, m, q_chunk_size):
-        end = min(start + q_chunk_size, m)
-        queries_chunk = queries[:, start:end, :]  # Shape: [n_batch, chunk_size, d]
-
-        # Compute pairwise distances between queries_chunk and data
-        dists = torch.cdist(queries_chunk, data)  # Shape: [n_batch, chunk_size, n]
-
-        # Determine neighbor relationships
-        in_nbr = dists <= radius  # Shape: [n_batch, chunk_size, n], bool tensor
-
-        # Count number of neighbors per query point
-        num_neighbors_per_query = in_nbr.sum(dim=2)  # Shape: [n_batch, chunk_size]
-        num_neighbors_per_query_list.append(num_neighbors_per_query)
-
-        # Update global max_num_neighbors
-        max_num_neighbors_chunk = num_neighbors_per_query.max().item()
-        if max_num_neighbors_chunk > max_num_neighbors:
-            max_num_neighbors = max_num_neighbors_chunk
-
-        # Prepare neighbor indices without padding
-        data_indices_chunk = data_indices.expand(n_batch, end - start, n)
-        valid_indices = torch.where(in_nbr, data_indices_chunk, n)
-        sorted_indices, _ = torch.sort(valid_indices, dim=2)
-        neighbors_index_chunk = sorted_indices
-        neighbors_index_chunk[neighbors_index_chunk == n] = -1  # Replace padding indices with -1
-
-        # Store unpadded neighbor indices
-        neighbors_index_list_unpadded.append(neighbors_index_chunk)
-
-    # After processing all chunks, pad all neighbors_index_chunk to global max_num_neighbors
-    neighbors_index_list_padded = []
-    for neighbors_index_chunk in neighbors_index_list_unpadded:
-        current_size = neighbors_index_chunk.shape[2]
-
-        # Pad if necessary
-        if current_size < max_num_neighbors:
-            pad_size = max_num_neighbors - current_size
-            neighbors_index_chunk = torch.cat(
-                [neighbors_index_chunk,
-                 torch.full((n_batch, neighbors_index_chunk.shape[1], pad_size), -1,
-                            device=data.device, dtype=torch.long)],
-                dim=2)
-        else:
-            neighbors_index_chunk = neighbors_index_chunk[:, :, :max_num_neighbors]
-        neighbors_index_list_padded.append(neighbors_index_chunk)
-
-    # Concatenate the padded neighbor indices along the query dimension
-    neighbors_index = torch.cat(neighbors_index_list_padded, dim=1)  # Shape: [n_batch, m, max_num_neighbors]
-
-    # Concatenate the number of neighbors per query
-    num_neighbors_per_query = torch.cat(num_neighbors_per_query_list, dim=1)  # Shape: [n_batch, m]
-
-    # Compute neighbors_row_splits
-    neighbors_row_splits = torch.cat([
-        torch.zeros((n_batch, 1), device=data.device, dtype=torch.long),
-        num_neighbors_per_query.cumsum(dim=1)
-    ], dim=1)  # Shape: [n_batch, m+1]
-
-    nbr_dict = {
-        'neighbors_index': neighbors_index,          # Shape: [n_batch, m, max_num_neighbors]
-        'neighbors_row_splits': neighbors_row_splits  # Shape: [n_batch, m+1]
-    }
-    return nbr_dict
 ##########
 # batchIntergralTransform
 ##########
@@ -436,22 +281,18 @@ class IntegralTransformBatch(nn.Module):
         neighbors_index = neighbors["neighbors_index"]  # [batch_size, m, max_num_neighbors]
         neighbors_row_splits = neighbors["neighbors_row_splits"]  # [batch_size, m+1]
 
-        # Replace -1 with 0 in neighbors_index for valid indexing
         neighbors_index_fixed = neighbors_index.clone()
         neighbors_index_fixed[neighbors_index_fixed == -1] = 0  # [batch_size, m, max_num_neighbors]
+        valid_mask = neighbors_index != -1  # [batch_size, m, max_num_neighbors]
 
-        # Create mask for valid neighbor indices
-        valid_mask = neighbors_index != -1  # [batch_size, m, max_num_neighbors], bool
 
-        # Gather y features at neighbor indices
         y_expanded = y.unsqueeze(1).expand(-1, m, -1, -1)  # [batch_size, m, n, d1]
         rep_features = torch.gather(
             y_expanded,  # [batch_size, m, n, d1]
-            2,  # Along the neighbor dimension
+            2,  
             neighbors_index_fixed.unsqueeze(-1).expand(-1, -1, -1, d1)  # [batch_size, m, max_num_neighbors, d1]
         )  # [batch_size, m, max_num_neighbors, d1]
 
-        # Gather f_y features at neighbor indices if f_y is provided
         if f_y is not None:
             _, _, d3 = f_y.shape
             f_y_expanded = f_y.unsqueeze(1).expand(-1, m, -1, -1)  # [batch_size, m, n, d3]
@@ -463,26 +304,19 @@ class IntegralTransformBatch(nn.Module):
         else:
             in_features = None
 
-        # Prepare self_features from x
-        self_features = x.unsqueeze(2).expand(-1, -1, neighbors_index.shape[2], -1)  # [batch_size, m, max_num_neighbors, d2]
 
-        # Concatenate rep_features and self_features
+        self_features = x.unsqueeze(2).expand(-1, -1, neighbors_index.shape[2], -1)  # [batch_size, m, max_num_neighbors, d2]
         agg_features = torch.cat([rep_features, self_features], dim=-1)  # [batch_size, m, max_num_neighbors, d1 + d2]
 
-        # Include in_features if required
         if f_y is not None and self.transform_type in ["nonlinear_kernelonly", "nonlinear"]:
             agg_features = torch.cat([agg_features, in_features], dim=-1)  # [batch_size, m, max_num_neighbors, *]
 
-        # Pass through channel MLP
         rep_features = self.channel_mlp(agg_features)  # [batch_size, m, max_num_neighbors, d_out]
 
-        # Apply in_features multiplication if required
         if f_y is not None and self.transform_type != "nonlinear_kernelonly":
-            rep_features = rep_features * in_features  # Element-wise multiplication
+            rep_features = rep_features * in_features  
 
-        # Apply weights if provided
         if weights is not None:
-            # Gather weights at neighbor indices
             weights_expanded = weights.unsqueeze(1).expand(-1, m, -1)  # [batch_size, m, n]
             nbr_weights = torch.gather(
                 weights_expanded,
@@ -495,141 +329,265 @@ class IntegralTransformBatch(nn.Module):
         else:
             reduction = "mean"
 
-        # Zero out invalid neighbor features
+
         rep_features = rep_features * valid_mask.unsqueeze(-1).float()
 
-        # Sum or mean over neighbors
         if reduction == "sum":
             out_features = rep_features.sum(dim=2)  # [batch_size, m, d_out]
         else:
-            # Compute number of valid neighbors per query point
             num_valid_neighbors = valid_mask.sum(dim=2).clamp(min=1).unsqueeze(-1)  # [batch_size, m, 1]
             out_features = rep_features.sum(dim=2) / num_valid_neighbors  # [batch_size, m, d_out]
 
         return out_features
 
+# Generate sample data
+n_batch = 8  # Reduced batch size for demonstration; increase as needed
+n = 9225      # Number of data points per batch
+m = 4096       # Number of query points per batch
+d = 2        # Dimensionality
+radius = 0.03
 
-##########
-# GNOEncoder
-##########
-class GNOEncoder(nn.Module):
-    def __init__(self, in_channels, out_channels, gno_config):
-        super().__init__()
-        self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
-        self.gno_radius = gno_config.gno_radius
+# Seed for reproducibility
+torch.manual_seed(42)
 
-        in_kernel_in_dim = gno_config.gno_coord_dim * 2
-        if gno_config.in_gno_transform_type == "nonlinear" or gno_config.in_gno_transform_type == "nonlinear_kernelonly":
-            in_kernel_in_dim += in_channels
-        
-        gno_config.in_gno_channel_mlp_hidden_layers.insert(0, in_kernel_in_dim)
-        gno_config.in_gno_channel_mlp_hidden_layers.append(out_channels)
-        self.gno = IntegralTransform(
-            channel_mlp_layers= gno_config.in_gno_channel_mlp_hidden_layers,
-            transform_type=gno_config.in_gno_transform_type,
-            use_torch_scatter=gno_config.gno_use_torch_scatter
-        )
-        
-        self.lifting = ChannelMLP(
-            in_channels = in_channels,
-            out_channels = out_channels,
-            n_layers= 1
-            )
+# Create random data and queries
+data = torch.rand(n_batch, n, d)
+queries = torch.rand(n_batch, m, d)
+
+@profile
+def batch_integral_v0(
+    channel_mlp:nn.Module,
+    f_y:torch.Tensor,
+    radius:float,
+    data:torch.Tensor,
+    queries:torch.Tensor
+):
+    neighbor_search_batch = NeighborSearch_batch(use_open3d=False)
+    result_batched = neighbor_search_batch(data, queries, radius)
+
+    # Instantiate the IntegralTransformBatch
+    integral_transform_batch = IntegralTransformBatch(
+        channel_mlp=channel_mlp,
+        use_torch_scatter=False
+    ) 
+    out_features_batched = integral_transform_batch(
+    y=data,
+    neighbors=result_batched,
+    x=queries,
+    f_y=f_y
+    )
+
+    return out_features_batched
+
+
+@profile
+def batch_integral_v1_cpu(
+    channel_mlp:nn.Module,
+    f_y:torch.Tensor, # n_batch, n, output_dim
+    radius:float,
+    data:torch.Tensor,
+    queries:torch.Tensor
+):
     
-    def forward(self, x, latent_queries, pndata):
-        """
-        x: [n_batch, n, d]
-        latent_queries: [n_batch, m, d]
-        pndata: [n_batch, n, n_channels]
-        """
-        x = rescale(x)
-        latent_queries = rescale(latent_queries)
-        pndata = pndata.permute(0,2,1)
-        pndata = self.lifting(pndata).permute(0,2,1)    
+    assert data.device.type == "cpu"
 
-        n_batch, n, d = x.shape
-        m = latent_queries.shape[1]
+    n_batch, n, d = data.shape
+    m = queries.shape[1]
 
-        encoded = []
-        for b in range(n_batch): 
-            x_b = x[b] # Shape: [n, d]
-            latent_queries_b = latent_queries[b] # Shape: [m, d]
-            pndata_b = pndata[b] # Shape: [n, n_channels]
 
-            neighbors = self.nb_search(x_b, latent_queries_b, self.gno_radius)
+    self_feature = []
+    in_feature   = []
+    rep_feature= []
+    indices = []
+    neighbors = []
+    segments  = []
+    for i, (f_y_b, data_b, queries_b) in enumerate(zip(f_y, data, queries)):
 
-            out_features_unbatched = self.gno(
-                y = x_b,
-                x = latent_queries_b,
-                f_y = pndata_b,
-                neighbors = neighbors
-            )
-
-            encoded.append(out_features_unbatched)
         
-        encoded = torch.stack(encoded, 0) # Shape: [n_batch, m, n_channels]
+        tree = scipy.spatial.cKDTree(data_b.detach().numpy())
+        result = tree.query_ball_point(
+            queries_b.detach().numpy(), 
+            r=radius,
+            return_sorted=True,
+            workers=-1) # [m]
+        src = torch.from_numpy(np.concatenate([x for x in result], axis=0)).to(torch.long)
+        nbr = torch.from_numpy(np.array([len(x) for x in result])).to(torch.long) 
+        dst = torch.arange(len(nbr)).repeat_interleave(nbr)
 
-        return encoded
+        # dist = torch.cdist(data_b, queries_b)
+        # dist[dist > radius ] = 0
+        # dist = dist.to_sparse_coo()
+        # src, dst = dist.indices()
+
+        self_feature.append(queries_b[dst])
+        rep_feature.append(data_b[src])
+        in_feature.append(f_y_b[src])
+        
+        indices.append(dst + i * m)
+        segments.append(nbr)
+
+    indices = torch.cat(indices, 0)
+    in_feature = torch.cat(in_feature, 0)
+    rep_feature = torch.cat(rep_feature, 0)
+    self_feature = torch.cat(self_feature, 0)
+    segments     = torch.cat(segments, 0)
+
+    agg_feature = torch.cat([rep_feature, self_feature], dim=-1)
+
+    rep_feature = channel_mlp(agg_feature)
+
+    rep_feature = rep_feature * in_feature
 
 
-############
-# GNO Decoder
-############
-class GNODecoder(nn.Module):
-    def __init__(self, in_channels, out_channels, gno_config):
-        super().__init__()
-        self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
-        self.gno_radius = gno_config.gno_radius
+    indptr = torch.zeros(len(segments) + 1, dtype=torch.long)
+    indptr[1:] = segments.cumsum(0)
+    output = segment_csr(rep_feature, indptr, reduce="mean", use_scatter=False)
 
-        out_kernel_in_dim = gno_config.gno_coord_dim * 2
-        out_kernel_in_dim += out_channels if gno_config.out_gno_transform_type != 'linear' else 0
-        gno_config.out_gno_channel_mlp_hidden_layers.insert(0, out_kernel_in_dim)
-        gno_config.out_gno_channel_mlp_hidden_layers.append(in_channels)
+    output = output.view(n_batch, m, output_dim)
 
-        self.gno = IntegralTransform(
-            channel_mlp_layers= gno_config.out_gno_channel_mlp_hidden_layers,
-            transform_type=gno_config.out_gno_transform_type,
-            use_torch_scatter=gno_config.gno_use_torch_scatter
+    return output
+
+@profile
+def serial_integral(
+        channel_mlp:nn.Module, # input_dim -> output_dim 
+        f_y:torch.Tensor, # n_batch, n, output_dim
+        radius:float,
+        data:torch.Tensor,
+        queries:torch.Tensor
+        ):
+    
+    integral = IntegralTransform(channel_mlp=channel_mlp)
+    outputs = []
+    for b in range(n_batch):
+
+        data_b = data[b]       # Shape: [n, d]
+        queries_b = queries[b] # Shape: [m, d]
+
+        neighbors = native_neighbor_search_batch(data_b, queries_b, radius)
+        
+        f_y_b = f_y[b]  # Shape: [n, output_dim]
+        
+        # Run the unbatched integral transfor
+        out_features_unbatched = integral(
+            y=data_b,
+            neighbors=neighbors,
+            x=queries_b,
+            f_y=f_y_b
         )
         
-        self.projection = ChannelMLP(
-            in_channels = in_channels,
-            out_channels = out_channels,
-            hidden_channels = gno_config.projection_channels,
-            n_layers=2,
-            n_dim=1,
-        )
-
-    def forward(self, x, latent_queries, rndata):
-        """
-        x: [n_batch, n, d]
-        latent_queries: [n_batch, m, d]
-        rndata: [n_batch, n, n_channels]
-        """
-        x = rescale(x)
-        latent_queries = rescale(latent_queries)
-        n_batch, n, d = x.shape
-        m = latent_queries.shape[1]
-        decoded = []
-        for b in range(n_batch):
-            x_b = x[b] # Shape: [n, d]
-            latent_queries_b = latent_queries[b] # Shape: [m, d]
-            rndata_b = rndata[b] # Shape: [n, n_channels]
-
-            neighbors = self.nb_search(x_b, latent_queries_b, self.gno_radius)
-
-            out_features_unbatched = self.gno(
-                y = x_b,
-                x = latent_queries_b,
-                f_y = rndata_b,
-                neighbors = neighbors
-            )
-        
-            decoded.append(out_features_unbatched)
-        decoded = torch.stack(decoded, 0) # Shape: [n_batch, m, n_channels]
-
-        decoded = decoded.permute(0,2,1)
-        decoded = self.projection(decoded).permute(0, 2, 1)  
+        outputs.append(out_features_unbatched)
+    
+    outputs = torch.stack(outputs, 0)
+    return outputs
 
 
-        return decoded
+if __name__ == "__main__":
+    n_batch  = 8 
+    n        = 9225
+    input_dim = 2 * d  # For agg_features: concatenation of rep_features and self_features
+    output_dim = 16    # Must match the dimension of f_y
+    channel_mlp_layers = [input_dim, 64, output_dim]  # Example MLP layers
+    radius = 0.03
+    mlp = LinearChannelMLP(layers=channel_mlp_layers)
+
+    f_y = torch.rand(n_batch, n, output_dim)  # Shape: [n_batch, n, output_dim]
+
+    result = serial_integral(mlp, f_y, radius, data, queries)
+    result0= batch_integral_v0(mlp, f_y, radius, data, queries)
+    result1= batch_integral_v1_cpu(mlp, f_y, radius, data, queries)
+
+    torch.testing.assert_close(result, result0)
+    torch.testing.assert_close(result, result1)
+# neighbor_search_batch = NeighborSearch_batch(use_open3d=False)
+# result_batched = neighbor_search_batch(data, queries, radius)
+# neighbor_search_unbatched = NeighborSearch(use_open3d=False)
+
+# # Define the channel MLP layers
+# input_dim = 2 * d  # For agg_features: concatenation of rep_features and self_features
+# output_dim = 16    # Must match the dimension of f_y
+# channel_mlp_layers = [input_dim, 64, output_dim]  # Example MLP layers
+
+# # Instantiate the IntegralTransformBatch
+# integral_transform_batch = IntegralTransformBatch(
+#     channel_mlp_layers=channel_mlp_layers,
+#     transform_type="linear",  # Can choose appropriate transform_type
+#     use_torch_scatter=False
+# )
+
+# # Instantiate the original IntegralTransform
+# integral_transform_unbatched = IntegralTransform(
+#     channel_mlp_layers=channel_mlp_layers,
+#     transform_type="linear",
+#     use_torch_scatter=False
+# )
+
+# # Copy weights from unbatched to batch version to ensure identical weights
+# def copy_model_weights(model_src, model_dest):
+#     src_params = dict(model_src.named_parameters())
+#     dest_params = dict(model_dest.named_parameters())
+#     for name in src_params:
+#         dest_params[name].data.copy_(src_params[name].data)
+
+# copy_model_weights(integral_transform_unbatched, integral_transform_batch)
+
+# # Generate f_y for all batches
+# f_y = torch.rand(n_batch, n, output_dim)  # Shape: [n_batch, n, output_dim]
+
+# # Now, for each batch, perform unbatched integral transform using neighbor indices from the batched result
+# outputs_unbatched = []
+# for b in range(n_batch):
+#     data_b = data[b]       # Shape: [n, d]
+#     queries_b = queries[b] # Shape: [m, d]
+    
+#     # Extract neighbor indices and row splits from batched result
+#     neighbors_index_b = result_batched['neighbors_index'][b]  # Shape: [m, max_num_neighbors]
+#     neighbors_row_splits_b = result_batched['neighbors_row_splits'][b]  # Shape: [m + 1]
+    
+#     # Flatten neighbors_index_b and remove -1 entries
+#     neighbors_index_flat = neighbors_index_b.view(-1)
+#     valid_mask = neighbors_index_flat != -1
+#     neighbors_index_unbatched = neighbors_index_flat[valid_mask]
+    
+#     # Adjust neighbors_row_splits_b
+#     # Compute num_neighbors_per_query
+#     num_neighbors_per_query = (neighbors_index_b != -1).sum(dim=1)
+#     neighbors_row_splits_unbatched = torch.zeros(m + 1, dtype=torch.long)
+#     neighbors_row_splits_unbatched[1:] = torch.cumsum(num_neighbors_per_query, dim=0)
+    
+#     neighbors_unbatched = {
+#         'neighbors_index': neighbors_index_unbatched,         # [num_neighbors_b]
+#         'neighbors_row_splits': neighbors_row_splits_unbatched  # [m + 1]
+#     }
+    
+#     # Get f_y for this batch
+#     f_y_b = f_y[b]  # Shape: [n, output_dim]
+    
+#     # Run the unbatched integral transform
+#     out_features_unbatched = integral_transform_unbatched(
+#         y=data_b,
+#         neighbors=neighbors_unbatched,
+#         x=queries_b,
+#         f_y=f_y_b
+#     )
+    
+#     outputs_unbatched.append(out_features_unbatched)
+    
+# # Run the batched integral transform
+# out_features_batched = integral_transform_batch(
+#     y=data,
+#     neighbors=result_batched,
+#     x=queries,
+#     f_y=f_y
+# )
+
+# # Now compare the outputs
+# for b in range(n_batch):
+#     out_unbatched = outputs_unbatched[b]  # Shape: [m, output_dim]
+#     out_batched = out_features_batched[b]  # Shape: [m, output_dim]
+    
+#     # Compare outputs
+#     if not torch.allclose(out_unbatched, out_batched, atol=1e-6):
+#         print(f"Batch {b} outputs are not equal.")
+#     else:
+#         print(f"Batch {b} outputs are equal.")
+

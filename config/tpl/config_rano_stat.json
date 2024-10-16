@@ -25,7 +25,9 @@
         "name": "rano",
         "drop_edge": 0.0,
         "variable_mesh": false,
+        "use_conditional_norm": false,
         "args":{
+            "patch_size": 2,
             "deepgnn": {
                 "node_latent_size": 16,
                 "edge_latent_size": 16,
