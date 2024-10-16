@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional
 from dataclasses import dataclass, asdict, field
+from rotary_embedding_torch import RotaryEmbedding, apply_rotary_emb
 from .mlp import ConditionedNorm
 from ...utils.dataclass import shallow_asdict
 
@@ -17,7 +18,7 @@ class AttentionConfig:
     num_kv_heads:int = 8
     use_conditional_norm:bool = False
     cond_norm_hidden_size:int = 4
-
+    atten_dropout:float = 0.0
 @dataclass 
 class FFNConfig:
     hidden_size:int = 256
@@ -31,6 +32,7 @@ class TransformerConfig:
     use_ffn_norm: bool = True
     norm_eps: float = 1e-6
     num_layers: int = 3
+    positional_embedding: str = 'absolute'
     attn_config: AttentionConfig = field(default_factory=AttentionConfig)
     ffn_config: FFNConfig = field(default_factory=FFNConfig)
 
@@ -122,7 +124,10 @@ class GroupQueryFlashAttention(nn.Module):
                  num_heads:int = 8,
                  num_kv_heads:int = 4,
                  use_conditional_norm:bool = False,
-                 cond_norm_hidden_size:int = 4
+                 cond_norm_hidden_size:int = 4,
+                 atten_dropout:float = 0.0,
+                 H:int = 64, 
+                 W:int = 64
                  ):
         super().__init__()
         assert hidden_size % num_heads == 0, f"hidden_size {hidden_size} must be divisible by num_heads {num_heads}"
@@ -131,7 +136,8 @@ class GroupQueryFlashAttention(nn.Module):
         self.num_kv_heads = num_kv_heads
         self.num_repeat   = num_heads // num_kv_heads
         self.head_dim = hidden_size // num_heads 
-    
+        self.atten_dropout = atten_dropout
+
         kv_hidden_size = self.head_dim * self.num_kv_heads
 
         self.q_proj = nn.Linear(input_size, hidden_size,    bias=False)
@@ -145,8 +151,9 @@ class GroupQueryFlashAttention(nn.Module):
             self.correction = None
             
         self.attn_dtype = torch.float16  # or torch.bfloat16
+        self.rotary_emb = RotaryEmbedding(dim=self.head_dim, freqs_for='pixel', max_freq = max(H,W))
 
-    def forward(self, x, condition:Optional[float]=None):
+    def forward(self, x, condition:Optional[float]=None, relative_positions:Optional[torch.Tensor]=None):
         """
         Parameters
         ----------
@@ -175,7 +182,14 @@ class GroupQueryFlashAttention(nn.Module):
             k = k.repeat_interleave(self.num_repeat, dim=1)
             v = v.repeat_interleave(self.num_repeat, dim=1)
 
-        x = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0)
+        if relative_positions is not None:
+            # relative_positions: shape [num_patches, 2]
+            rotary_pos_emb = self.rotary_emb(relative_positions) # shape [num_patches, head_dim * 2]
+            rotary_pos_emb = rotary_pos_emb.unsqueeze(0).unsqueeze(0) # shape [1, 1, num_patches, head_dim * 2]
+            q = apply_rotary_emb(q, rotary_pos_emb)
+            k = apply_rotary_emb(k, rotary_pos_emb)
+
+        x = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.atten_dropout)
 
         x = x.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
         x = self.o_proj(x)
@@ -254,7 +268,8 @@ class TransformerBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        condition:Optional[float]=None
+        condition:Optional[float]=None,
+        relative_positions:Optional[torch.Tensor]=None
     )->torch.Tensor:
         """
         Parameters
@@ -267,7 +282,7 @@ class TransformerBlock(nn.Module):
         torch.Tensor, shape (..., seq_len, output_size)
         """
         h = x if self.attn_norm is None else self.attn_norm(x)
-        h = x + self.attn(h, condition = condition)
+        h = x + self.attn(h, condition = condition, relative_positions=relative_positions)
         h = h if self.ffn_norm is None else self.ffn_norm(h)
         out = h + self.ffn(h, condition = condition)
         return out
@@ -308,7 +323,7 @@ class Transformer(nn.Module):
             ) for _ in range(config.num_layers)
         ])
 
-    def forward(self, x:torch.Tensor, condition:Optional[float]=None)->torch.Tensor:
+    def forward(self, x:torch.Tensor, condition:Optional[float]=None, relative_positions:Optional[torch.Tensor]=None)->torch.Tensor:
         """ 
         Parameters
         ----------
@@ -322,6 +337,6 @@ class Transformer(nn.Module):
         """
         x = self.input_proj(x)
         for layer in self.layers:
-            x = layer(x, condition = condition)
+            x = layer(x, condition = condition, relative_positions=relative_positions)
         x = self.output_proj(x)
         return x

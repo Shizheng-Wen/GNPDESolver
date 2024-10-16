@@ -52,6 +52,11 @@ class LANO(Physical2Regional2Physical):
                                       self.patch_size * self.patch_size * self.node_latent_size)
         self.register_buffer('positional_embeddings', self.get_positional_embeddings())
 
+        self.positional_embedding_name = config.positional_embedding
+
+        config.attn_config.H = self.H
+        config.attn_config.W = self.W
+        
         return Transformer(
             input_size=self.node_latent_size * self.patch_size * self.patch_size,
             output_size=self.node_latent_size * self.patch_size * self.patch_size,
@@ -110,9 +115,18 @@ class LANO(Physical2Regional2Physical):
 
         # Apply Vision Transformer
         rndata = self.patch_linear(rndata)
-        pos_emb = self.positional_embeddings.unsqueeze(0)
-        rndata = rndata + pos_emb
-        rndata = self.processor(rndata, condition=condition)
+        pos_emb = self.get_patch_positions() # shape [num_patches, 2]
+
+        if self.positional_embedding_name == 'absolute':
+            pos_emb = self.compute_absolute_embeddings(pos_emb, self.patch_size * self.patch_size * self.node_latent_size)
+            pos_emb = pos_emb.unsqueeze(0)
+            rndata = rndata + pos_emb
+            relative_positions = None
+    
+        elif self.positional_embedding_name == 'rope':
+            relative_positions = pos_emb
+
+        rndata = self.processor(rndata, condition=condition, relative_positions=relative_positions)
 
         # Reshape back to the original shape
         rndata = rndata.view(batch_size, num_patches_H, num_patches_W, P, P, C)
@@ -159,7 +173,7 @@ class LANO(Physical2Regional2Physical):
 
         return output
 
-    def get_positional_embeddings(self):
+    def get_patch_positions(self):
         """
         Generate positional embeddings for the patches.
         """
@@ -170,10 +184,10 @@ class LANO(Physical2Regional2Physical):
             torch.arange(num_patches_W, dtype=torch.float32),
             indexing='ij'
         ), dim=-1).reshape(-1, 2)
-        pos_emb = self.compute_rope_embeddings(positions, self.patch_size * self.patch_size * self.node_latent_size)
-        return pos_emb
 
-    def compute_rope_embeddings(self, positions, embed_dim):
+        return positions
+
+    def compute_absolute_embeddings(self, positions, embed_dim):
         """
         Compute RoPE embeddings for the given positions.
         """
