@@ -224,7 +224,7 @@ class StaticTrainer(TrainerBase):
             avg_time = sum(times) / len(times)
             print(f"Average inference time over 10 runs (batch size = 1): {avg_time:.6f} seconds")
 
-class StaticTrainer_unstructured(TrainerBase):
+class StaticTrainer_unstructured(StaticTrainer):
     """
     Trainer for static problems, i.e. problems that do not depend on time and is unstructured.
     """
@@ -402,8 +402,8 @@ class StaticTrainer_unstructured(TrainerBase):
         self.config.datarow["relative error (direct)"] = final_metric
 
         x_plot = x_sample * self.c_std.to(self.device)  
-        self.plot_results(coord_sample[0], x_sample[0], y_sample_de_norm[0], pred_de_norm[0])
-
+        
+        self.plot_results(coords = coord_sample[0], input = x_sample[0], gt = y_sample_de_norm[0], pred = pred_de_norm[0])
 
 class StaticTrainer_test(StaticTrainer):
     """

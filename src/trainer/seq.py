@@ -73,7 +73,7 @@ class SequentialTrainer(TrainerBase):
         test_size = dataset_config["test_size"]
 
         assert train_size + val_size + test_size <= total_samples, "Sum of train, val, and test sizes exceeds total samples"
-
+    
         # Split data into train, val, test
         u_train = u_array[:train_size]
         u_val = u_array[train_size:train_size+val_size]

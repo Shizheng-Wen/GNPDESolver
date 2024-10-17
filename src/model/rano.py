@@ -73,7 +73,6 @@ class RANO(Physical2Regional2Physical):
         num_patches_H = H // P
         num_patches_W = W // P
         num_patches = num_patches_H * num_patches_W
-        
         # reshape to patches
         rndata = rndata.view(batch_size, H, W, C)
         rndata = rndata.view(batch_size, num_patches_H, P, num_patches_W, P, C)

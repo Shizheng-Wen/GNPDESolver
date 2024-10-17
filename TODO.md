@@ -1,16 +1,17 @@
 **Ongoing experiments:**
-- [ ] `config_lano_ce_gauss_learnrate.json`的实验继续，因为之前的模型并没有收敛，所以继续进行学习，看一下继续学习能否进一步优化模型。
+- [x] `config_lano_ce_gauss_learnrate.json`的实验继续，因为之前的模型并没有收敛，所以继续进行学习，看一下继续学习能否进一步优化模型。
     - 进一步优化感觉也没什么用，学习率基本上收敛不下降了。
 - [x] `config_lano_time_conditionedlayer.json`的实验，仅在attention层添加了：
     - 实验结果感觉没啥用，模型表现更差了，误差到了50%，模型基本上很快就局部收敛了。
 
 **待做:**- 
-- [ ] 修正一下time-conditioned，看一下max怎么做的，然后跑一个时空的数据集(就用ce_gauss) 看一下。接着再再这个ce_gauss的数据集上测试一下消融实验
-- [ ] 重新写一个trainer，专门给不规则的网格来使用，然后将静态的几个数据集全部跑完，包括gino的和LANO的
-    - [ ] fix 一下airfoil grid的训练，目前只是用把坐标加在input的方式进行训练
+- [x] 修正一下time-conditioned，看一下max怎么做的，然后跑一个时空的数据集(就用ce_gauss) 看一下。接着再再这个ce_gauss的数据集上测试一下消融实验
+- [x] 重新写一个trainer，专门给不规则的网格来使用，然后将静态的几个数据集全部跑完，包括gino的和LANO的
+    - [x] fix 一下airfoil grid的训练，目前只是用把坐标加在input的方式进行训练
 - [ ] 将GINO的几个Time-dependent dataset全部重新训练一下，看看效果
 
 - [ ] 几个新的trick:
+    - [x] 施加一下rope策略:换了一下rope，并且尝试了用patch size = 2的情况，模型的性能仍旧无法得到提升
     - [ ] 将position encoding之后的数据送进GNO中
     - [ ] 采用incremental training的策略，one step pair训练完后，再上multi-step继续精调模型
     - [ ] Poseidon pretrain一下

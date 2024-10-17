@@ -19,7 +19,6 @@ class AttentionConfig:
     use_conditional_norm:bool = False
     cond_norm_hidden_size:int = 4
     atten_dropout:float = 0.0
-    positional_embedding: str = 'absolute'
 @dataclass 
 class FFNConfig:
     hidden_size:int = 256
@@ -41,81 +40,81 @@ class TransformerConfig:
 Reference: https://github.com/meta-llama/llama3/blob/main/llama/model.py
 """
 
-# class GroupQueryAttention(nn.Module):
-#     def __init__(self, 
-#                  input_size:int,
-#                  output_size:int, 
-#                  hidden_size:int = 128, 
-#                  num_heads:int = 8,
-#                  num_kv_heads:int = 4,
-#                  use_conditional_norm:bool = False,
-#                  cond_norm_hidden_size:int = 4
-#                  ):
-#         super().__init__()
-#         assert hidden_size % num_heads == 0, f"hidden_size {hidden_size} must be divisible by num_heads {num_heads}"
-#         assert num_heads % num_kv_heads == 0, f"num_heads {num_heads} must be divisible by num_kv_heads {num_kv_heads}"
-#         self.num_heads = num_heads 
-#         self.num_kv_heads = num_kv_heads
-#         self.num_repeat   = num_heads // num_kv_heads
-#         self.head_dim = hidden_size // num_heads 
+class GroupQueryAttention(nn.Module):
+    def __init__(self, 
+                 input_size:int,
+                 output_size:int, 
+                 hidden_size:int = 128, 
+                 num_heads:int = 8,
+                 num_kv_heads:int = 4,
+                 use_conditional_norm:bool = False,
+                 cond_norm_hidden_size:int = 4
+                 ):
+        super().__init__()
+        assert hidden_size % num_heads == 0, f"hidden_size {hidden_size} must be divisible by num_heads {num_heads}"
+        assert num_heads % num_kv_heads == 0, f"num_heads {num_heads} must be divisible by num_kv_heads {num_kv_heads}"
+        self.num_heads = num_heads 
+        self.num_kv_heads = num_kv_heads
+        self.num_repeat   = num_heads // num_kv_heads
+        self.head_dim = hidden_size // num_heads 
 
-#         kv_hidden_size = self.head_dim * num_kv_heads
+        kv_hidden_size = self.head_dim * num_kv_heads
 
-#         self.scale = self.head_dim ** -0.5
+        self.scale = self.head_dim ** -0.5
         
-#         self.q_proj = nn.Linear(input_size, hidden_size,    bias=False)
-#         self.k_proj = nn.Linear(input_size, kv_hidden_size, bias=False)
-#         self.v_proj = nn.Linear(input_size, kv_hidden_size, bias=False)
-#         self.o_proj = nn.Linear(hidden_size, output_size,   bias=False)
+        self.q_proj = nn.Linear(input_size, hidden_size,    bias=False)
+        self.k_proj = nn.Linear(input_size, kv_hidden_size, bias=False)
+        self.v_proj = nn.Linear(input_size, kv_hidden_size, bias=False)
+        self.o_proj = nn.Linear(hidden_size, output_size,   bias=False)
 
-#         if use_conditional_norm:
-#             self.correction = ConditionedNorm(output_size, output_size,cond_norm_hidden_size)
-#         else:
-#             self.correction = None
+        if use_conditional_norm:
+            self.correction = ConditionedNorm(output_size, output_size,cond_norm_hidden_size)
+        else:
+            self.correction = None
         
-#         self.attn_dtype = torch.float16
+        self.attn_dtype = torch.float16
         
-#     def forward(self, x, condition:Optional[float]=None):
-#         """
-#         Parameters
-#         ----------
-#         x: torch.Tensor, shape (..., seq_len, input_size)
+    def forward(self, x, condition:Optional[float]=None):
+        """
+        Parameters
+        ----------
+        x: torch.Tensor, shape (..., seq_len, input_size)
 
-#         Returns
-#         -------
-#         torch.Tensor, shape (..., seq_len, output_size)
-#         """
-#         if self.correction is not None:
-#             x = self.correction(x, condition = condition)
+        Returns
+        -------
+        torch.Tensor, shape (..., seq_len, output_size)
+        """
+        if self.correction is not None:
+            x = self.correction(x, condition = condition)
 
-#         q = self.q_proj(x)
-#         k = self.k_proj(x)
-#         v = self.v_proj(x)
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
 
-#         q = q.view(q.shape[:-1] + (self.num_heads, -1)) # (..., seq_len, num_heads, head_dim)
-#         k = k.view(k.shape[:-1] + (self.num_kv_heads, -1)) # (..., seq_len, num_kv_heads, head_dim)
-#         v = v.view(v.shape[:-1] + (self.num_kv_heads, -1)) # (..., seq_len, num_kv_heads, head_dim)
+        q = q.view(q.shape[:-1] + (self.num_heads, -1)) # (..., seq_len, num_heads, head_dim)
+        k = k.view(k.shape[:-1] + (self.num_kv_heads, -1)) # (..., seq_len, num_kv_heads, head_dim)
+        v = v.view(v.shape[:-1] + (self.num_kv_heads, -1)) # (..., seq_len, num_kv_heads, head_dim)
 
-#         # NOTE: should use triton or expand to lower mem cost
-#         k = k.repeat_interleave(self.num_repeat, dim=-2) # (..., seq_len, num_heads, head_dim)
-#         v = v.repeat_interleave(self.num_repeat, dim=-2) # (..., seq_len, num_heads, head_dim)
+        # NOTE: should use triton or expand to lower mem cost
+        k = k.repeat_interleave(self.num_repeat, dim=-2) # (..., seq_len, num_heads, head_dim)
+        v = v.repeat_interleave(self.num_repeat, dim=-2) # (..., seq_len, num_heads, head_dim)
 
-#         q = q.transpose(-3,-2) # (... , num_heads, seq_len, head_dim)
-#         k = k.transpose(-3,-2) # (... , num_heads, seq_len, head_dim)
-#         v = v.transpose(-3,-2) # (... , num_heads, seq_len, head_dim)
+        q = q.transpose(-3,-2) # (... , num_heads, seq_len, head_dim)
+        k = k.transpose(-3,-2) # (... , num_heads, seq_len, head_dim)
+        v = v.transpose(-3,-2) # (... , num_heads, seq_len, head_dim)
 
-#         attn = (q @ k.mT) * self.scale # (..., num_heads, seq_len, seq_len)
-#         attn = attn.softmax(dim=-1) 
-#         x = attn @ v # （..., num_heads, seq_len, head_dim)
-#         x = x.transpose(-3,-2) #  (..., seq_len, num_heads, head_dim)
-#         x = x.contiguous().view(x.shape[:-2] + (-1,)) # (..., seq_len, hidden_size)
-#         x = self.o_proj(x)
+        attn = (q @ k.mT) * self.scale # (..., num_heads, seq_len, seq_len)
+        attn = attn.softmax(dim=-1) 
+        x = attn @ v # （..., num_heads, seq_len, head_dim)
+        x = x.transpose(-3,-2) #  (..., seq_len, num_heads, head_dim)
+        x = x.contiguous().view(x.shape[:-2] + (-1,)) # (..., seq_len, hidden_size)
+        x = self.o_proj(x)
 
-#         return x
+        return x
 
-#     @classmethod
-#     def from_config(cls, input_size:int, output_size:int, config:AttentionConfig):
-#         return cls(input_size, output_size, **asdict(config))
+    @classmethod
+    def from_config(cls, input_size:int, output_size:int, config:AttentionConfig):
+        return cls(input_size, output_size, **asdict(config))
 
 class GroupQueryFlashAttention(nn.Module):
     def __init__(self, 
@@ -128,8 +127,7 @@ class GroupQueryFlashAttention(nn.Module):
                  cond_norm_hidden_size:int = 4,
                  atten_dropout:float = 0.0,
                  H:int = 64, 
-                 W:int = 64,
-                 positional_embedding: str = "absolute"
+                 W:int = 64
                  ):
         super().__init__()
         assert hidden_size % num_heads == 0, f"hidden_size {hidden_size} must be divisible by num_heads {num_heads}"
@@ -153,8 +151,7 @@ class GroupQueryFlashAttention(nn.Module):
             self.correction = None
             
         self.attn_dtype = torch.float16  # or torch.bfloat16
-        if positional_embedding == "rope":
-            self.rotary_emb = RotaryEmbedding(dim=self.head_dim)
+        self.rotary_emb = RotaryEmbedding(dim=self.head_dim, freqs_for='pixel', max_freq = max(H,W))
 
     def forward(self, x, condition:Optional[float]=None, relative_positions:Optional[torch.Tensor]=None):
         """
@@ -186,8 +183,11 @@ class GroupQueryFlashAttention(nn.Module):
             v = v.repeat_interleave(self.num_repeat, dim=1)
 
         if relative_positions is not None:
-            q = self.rotary_emb.rotate_queries_or_keys(q)
-            k = self.rotary_emb.rotate_queries_or_keys(k)
+            # relative_positions: shape [num_patches, 2]
+            rotary_pos_emb = self.rotary_emb(relative_positions) # shape [num_patches, head_dim * 2]
+            rotary_pos_emb = rotary_pos_emb.unsqueeze(0).unsqueeze(0) # shape [1, 1, num_patches, head_dim * 2]
+            q = apply_rotary_emb(q, rotary_pos_emb)
+            k = apply_rotary_emb(k, rotary_pos_emb)
 
         x = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.atten_dropout)
 
@@ -291,7 +291,6 @@ class TransformerBlock(nn.Module):
     def from_config(cls,input_size:int, 
                         output_size:int, 
                         config:TransformerConfig = TransformerConfig()):
-        config.attn_config.positional_embedding = config.positional_embedding
         kwargs = shallow_asdict(config)
         kwargs.pop("num_layers")
         kwargs.pop("hidden_size")

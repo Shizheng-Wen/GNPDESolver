@@ -50,12 +50,16 @@ class LANO(Physical2Regional2Physical):
         # Initialize the Vision Transformer processor
         self.patch_linear = nn.Linear(self.patch_size * self.patch_size * self.node_latent_size,
                                       self.patch_size * self.patch_size * self.node_latent_size)
-        self.register_buffer('positional_embeddings', self.get_positional_embeddings())
+        
 
         self.positional_embedding_name = config.positional_embedding
-
-        config.attn_config.H = self.H
-        config.attn_config.W = self.W
+        self.positions = self.get_patch_positions()
+        if self.positional_embedding_name == 'absolute':
+            pos_emb = self.compute_absolute_embeddings(self.positions, self.patch_size * self.patch_size * self.node_latent_size)
+            self.register_buffer('positional_embeddings', pos_emb)
+        
+        setattr(config.attn_config, 'H', self.H)
+        setattr(config.attn_config, 'W', self.W)
         
         return Transformer(
             input_size=self.node_latent_size * self.patch_size * self.patch_size,
@@ -106,25 +110,23 @@ class LANO(Physical2Regional2Physical):
         num_patches_H = H // P
         num_patches_W = W // P
         num_patches = num_patches_H * num_patches_W
-
         # Reshape to patches
         rndata = rndata.view(batch_size, H, W, C)
         rndata = rndata.view(batch_size, num_patches_H, P, num_patches_W, P, C)
         rndata = rndata.permute(0, 1, 3, 2, 4, 5).contiguous()
         rndata = rndata.view(batch_size, num_patches_H * num_patches_W, P * P * C)
-
+        
         # Apply Vision Transformer
         rndata = self.patch_linear(rndata)
-        pos_emb = self.get_patch_positions() # shape [num_patches, 2]
+        pos = self.positions.to(rndata.device)  # shape [num_patches, 2]
 
         if self.positional_embedding_name == 'absolute':
-            pos_emb = self.compute_absolute_embeddings(pos_emb, self.patch_size * self.patch_size * self.node_latent_size)
-            pos_emb = pos_emb.unsqueeze(0)
+            pos_emb = self.compute_absolute_embeddings(pos, self.patch_size * self.patch_size * self.node_latent_size)
             rndata = rndata + pos_emb
             relative_positions = None
     
         elif self.positional_embedding_name == 'rope':
-            relative_positions = pos_emb
+            relative_positions = pos
 
         rndata = self.processor(rndata, condition=condition, relative_positions=relative_positions)
 
@@ -199,3 +201,4 @@ class LANO(Physical2Regional2Physical):
         pos_emb = torch.cat([torch.sin(sinusoid_inp), torch.cos(sinusoid_inp)], dim=-1)
         pos_emb = pos_emb.view(positions.size(0), -1)
         return pos_emb
+
