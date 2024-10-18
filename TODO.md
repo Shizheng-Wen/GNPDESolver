@@ -4,7 +4,21 @@
 - [x] `config_lano_time_conditionedlayer.json`的实验，仅在attention层添加了：
     - 实验结果感觉没啥用，模型表现更差了，误差到了50%，模型基本上很快就局部收敛了。
 
+
 **待做:**- 
+- [ ] 对于processor部分，施加新的components，具体来说，将[U-ViT](https://arxiv.org/pdf/2209.12152) 以及ScoT施加进来，这周找[bogdan](https://arxiv.org/pdf/2409.18359)探讨一下这个方面。
+- [ ] 对于poseidon，这周末微调一下这个模型在不规则数据集上的表现，微调一下encoder和decoder
+- [ ] 这周检查一下代码，重新整理一下，确保每一个components都work。
+- [ ] 这周figure一下GNO和Transformer那几篇文章，Sid认为encoder那个地方得换，他不是很信赖GNO这种方法。
+- [ ] incremental training的策略可以使用，把目标和方法再整理一下
+- [ ] 就是我发现一个现象，就是对于那几个数据集，NS_gauss，CE_RP以及CE_Gauss，模型很容易在训练数据集上过拟合，并且训练数据集上loss下降很快，但是在测试数据集上loss完全不动的，感觉似乎训练数据集和测试数据集不属于相同的数据分布，很奇怪。一个比较直接的方法就是：
+    - [ ] 重新测试一下数据分布。
+    - [ ] 对于这几组数据，换一下数据集重新测试一下。
+    - [ ] 对于CE那两组数据，尝试不用那么多channels，测试一下效果。
+
+
+
+
 - [x] 修正一下time-conditioned，看一下max怎么做的，然后跑一个时空的数据集(就用ce_gauss) 看一下。接着再再这个ce_gauss的数据集上测试一下消融实验
 - [x] 重新写一个trainer，专门给不规则的网格来使用，然后将静态的几个数据集全部跑完，包括gino的和LANO的
     - [x] fix 一下airfoil grid的训练，目前只是用把坐标加在input的方式进行训练

@@ -21,6 +21,7 @@ class GNOConfig:
     in_gno_transform_type: str = 'linear'
     out_gno_transform_type: str = 'linear'
     gno_use_torch_scatter: str = True
+    node_embedding: bool = False
 
 ############
 # Integral Transform (GNO)
@@ -235,6 +236,8 @@ class GNOEncoder(nn.Module):
         self.graph_cache = None 
 
         in_kernel_in_dim = gno_config.gno_coord_dim * 2
+        if gno_config.node_embedding:
+            in_kernel_in_dim = gno_config.gno_coord_dim * 4 * 2 * 2 # 32
         if gno_config.in_gno_transform_type == "nonlinear" or gno_config.in_gno_transform_type == "nonlinear_kernelonly":
             in_kernel_in_dim += in_channels
         
@@ -263,13 +266,12 @@ class GNOEncoder(nn.Module):
                 self.gno_radius
             )
             self.graph_cache = True
-
         pndata = pndata.permute(0,2,1)
         pndata = self.lifting(pndata).permute(0, 2, 1)  
 
         encoded = self.gno(
-            y=self.input_geom,
-            x=self.latent_queries,
+            y=graph.physical_to_regional.get_ndata()[0],
+            x=graph.physical_to_regional.get_ndata()[1][:,:-1],
             f_y=pndata,
             neighbors=self.spatial_nbrs
         ) # [batch_size, num_nodes, channels]
@@ -285,8 +287,10 @@ class GNODecoder(nn.Module):
         self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
         self.gno_radius = gno_config.gno_radius
         self.graph_cache = None
-
+            
         out_kernel_in_dim = gno_config.gno_coord_dim * 2
+        if gno_config.node_embedding:
+            out_kernel_in_dim = gno_config.gno_coord_dim * 4 * 2 * 2 # 32
         out_kernel_in_dim += out_channels if gno_config.out_gno_transform_type != 'linear' else 0
         gno_config.out_gno_channel_mlp_hidden_layers.insert(0, out_kernel_in_dim)
         gno_config.out_gno_channel_mlp_hidden_layers.append(in_channels)
@@ -318,9 +322,10 @@ class GNODecoder(nn.Module):
                 self.latent_queries,
                 self.gno_radius
             )
+
         decoded = self.gno(
-            y=self.input_geom,
-            x=self.latent_queries,
+            y=graph.regional_to_physical.get_ndata()[0],
+            x=graph.regional_to_physical.get_ndata()[1][:,:-1],
             f_y=rndata,
             neighbors=self.spatial_nbrs
         )
