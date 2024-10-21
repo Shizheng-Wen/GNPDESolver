@@ -6,14 +6,20 @@
 
 
 **待做:**- 
+- [ ] 将不想管的config和结果全部都删掉
 - [ ] 对于processor部分，施加新的components，具体来说，将[U-ViT](https://arxiv.org/pdf/2209.12152) 以及ScoT施加进来，这周找[bogdan](https://arxiv.org/pdf/2409.18359)探讨一下这个方面。
 - [ ] 对于poseidon，这周末微调一下这个模型在不规则数据集上的表现，微调一下encoder和decoder
 - [ ] 这周检查一下代码，重新整理一下，确保每一个components都work。
+    - [ ] 检查一下metric那个地方用的对不对。
+    - [ ] 为什么提高batch_size没有提升模型训练性能，但是显存开销却提升了，这个很诡异，因为模型的训练速度基本都没变。
+    - [ ] 模型重视容易在训练数据集上过拟合
 - [ ] 这周figure一下GNO和Transformer那几篇文章，Sid认为encoder那个地方得换，他不是很信赖GNO这种方法。
+    - [ ] 可以在GNO那个地方加入GAT的机制，用attention来确定应该regional points should focus哪些physical points。
 - [ ] incremental training的策略可以使用，把目标和方法再整理一下
 - [ ] 就是我发现一个现象，就是对于那几个数据集，NS_gauss，CE_RP以及CE_Gauss，模型很容易在训练数据集上过拟合，并且训练数据集上loss下降很快，但是在测试数据集上loss完全不动的，感觉似乎训练数据集和测试数据集不属于相同的数据分布，很奇怪。一个比较直接的方法就是：
     - [ ] 重新测试一下数据分布。
-    - [ ] 对于这几组数据，换一下数据集重新测试一下。
+    - [ ] 仔细研究一下表现比较差的那几个数据集
+    - [ ] 对于这几组数据，换一下数据集重新测试一下,或者用更多的数据集测试一下，其实也可以用不同的batch_size测试一下
     - [ ] 对于CE那两组数据，尝试不用那么多channels，测试一下效果。
 
 
