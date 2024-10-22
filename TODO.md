@@ -7,7 +7,7 @@
 
 **待做:**- 
 - [ ] 将不想管的config和结果全部都删掉
-- [ ] 对于processor部分，施加新的components，具体来说，将[U-ViT](https://arxiv.org/pdf/2209.12152) 以及ScoT施加进来，这周找[bogdan](https://arxiv.org/pdf/2409.18359)探讨一下这个方面。
+- [x] 对于processor部分，施加新的components，具体来说，将[U-ViT](https://arxiv.org/pdf/2209.12152) 以及ScoT施加进来，这周找[bogdan](https://arxiv.org/pdf/2409.18359)探讨一下这个方面。
 - [ ] 对于poseidon，这周末微调一下这个模型在不规则数据集上的表现，微调一下encoder和decoder
 - [ ] 这周检查一下代码，重新整理一下，确保每一个components都work。
     - [x] 检查一下metric那个地方用的对不对。
