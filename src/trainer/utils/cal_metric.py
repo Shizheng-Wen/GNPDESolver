@@ -15,6 +15,7 @@ def compute_batch_errors(gtr: torch.Tensor, prd: torch.Tensor, metadata: Metadat
     Returns:
         torch.Tensor: Relative errors per sample per variable chunk, shape [batch_size, num_chunks]
     """
+    breakpoint()
     # normalize the data
     active_vars = metadata.active_variables
 

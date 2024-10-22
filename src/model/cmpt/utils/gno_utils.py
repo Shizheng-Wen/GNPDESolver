@@ -138,7 +138,7 @@ def segment_csr(
         reduce by taking the average of all neighbors.
         Otherwise take the sum.
     """
-    if reduce not in ["mean", "sum"]:
+    if not use_scatter and reduce not in ["mean", "sum"]:
         raise ValueError("reduce must be one of 'mean', 'sum'")
 
     if (

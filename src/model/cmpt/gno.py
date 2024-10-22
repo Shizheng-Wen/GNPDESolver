@@ -22,6 +22,10 @@ class GNOConfig:
     out_gno_transform_type: str = 'linear'
     gno_use_torch_scatter: str = True
     node_embedding: bool = False
+    use_attn: Optional[bool] = None 
+    attention_type: str = 'cosine'
+
+
 
 ############
 # Integral Transform (GNO)
@@ -87,6 +91,9 @@ class IntegralTransform(nn.Module):
         channel_mlp_non_linearity=F.gelu,
         transform_type="linear",
         use_torch_scatter=True,
+        use_attn=None,
+        coord_dim=None,
+        attention_type='cosine'
     ):
         super().__init__()
 
@@ -94,13 +101,10 @@ class IntegralTransform(nn.Module):
 
         self.transform_type = transform_type
         self.use_torch_scatter = use_torch_scatter
+        self.use_attn = use_attn
+        self.attention_type = attention_type
 
-        if (
-            self.transform_type != "linear_kernelonly"
-            and self.transform_type != "linear"
-            and self.transform_type != "nonlinear_kernelonly"
-            and self.transform_type != "nonlinear"
-        ):
+        if self.transform_type not in ["linear_kernelonly", "linear", "nonlinear_kernelonly", "nonlinear"]:
             raise ValueError(
                 f"Got transform_type={transform_type} but expected one of "
                 "[linear_kernelonly, linear, nonlinear_kernelonly, nonlinear]"
@@ -110,7 +114,22 @@ class IntegralTransform(nn.Module):
             self.channel_mlp = LinearChannelMLP(layers=channel_mlp_layers, non_linearity=channel_mlp_non_linearity)
         else:
             self.channel_mlp = channel_mlp
-            
+        
+        if self.use_attn:
+            if coord_dim is None:
+                raise ValueError("coord_dim must be specified when use_attn is True")
+            self.coord_dim = coord_dim
+
+            if self.attention_type == 'dot_product':
+                attention_dim = 64 
+                self.query_proj = nn.Linear(self.coord_dim, attention_dim)
+                self.key_proj = nn.Linear(self.coord_dim, attention_dim)
+                self.scaling_factor = 1.0 / (attention_dim ** 0.5)
+            elif self.attention_type == 'cosine':
+                pass
+            else:
+                raise ValueError(f"Invalid attention_type: {self.attention_type}. Must be 'cosine' or 'dot_product'.")
+
 
     """"
     
@@ -187,6 +206,31 @@ class IntegralTransform(nn.Module):
 
         self_features = torch.repeat_interleave(x, num_reps, dim=0)
 
+        # attention usage
+        if self.use_attn:
+            query_coords = self_features[:, :self.coord_dim]
+            key_coords = rep_features[:, :self.coord_dim]
+
+            if self.attention_type == 'dot_product':
+                query = self.query_proj(query_coords)  # [num_neighbors, attention_dim]
+                key = self.key_proj(key_coords)        # [num_neighbors, attention_dim]
+
+                attention_scores = torch.sum(query * key, dim=-1) * self.scaling_factor  # [num_neighbors]
+
+            elif self.attention_type == 'cosine':
+                query_norm = F.normalize(query_coords, p=2, dim=-1)
+                key_norm = F.normalize(key_coords, p=2, dim=-1)
+                attention_scores = torch.sum(query_norm * key_norm, dim=-1)  # [num_neighbors]
+
+            else:
+                raise ValueError(f"Invalid attention_type: {self.attention_type}. Must be 'cosine' or 'dot_product'.")
+
+            splits = neighbors["neighbors_row_splits"]
+            attention_weights = self.segment_softmax(attention_scores, splits)
+        else:
+            attention_weights = None
+
+
         agg_features = torch.cat([rep_features, self_features], dim=-1)
         if f_y is not None and (
             self.transform_type == "nonlinear_kernelonly"
@@ -203,6 +247,9 @@ class IntegralTransform(nn.Module):
     
         if f_y is not None and self.transform_type != "nonlinear_kernelonly":
             rep_features = rep_features * in_features
+        
+        if self.use_attn:
+            rep_features = rep_features * attention_weights.unsqueeze(-1)
 
         if weights is not None:
             assert weights.ndim == 1, "Weights must be of dimension 1 in all cases"
@@ -215,7 +262,7 @@ class IntegralTransform(nn.Module):
             rep_features = nbr_weights * rep_features
             reduction = "sum"
         else:
-            reduction = "mean"
+            reduction = "mean" if not self.use_attn else "sum"
 
         splits = neighbors["neighbors_row_splits"]
         if batched:
@@ -224,6 +271,34 @@ class IntegralTransform(nn.Module):
         out_features = segment_csr(rep_features, splits, reduce=reduction, use_scatter=self.use_torch_scatter)
 
         return out_features
+
+    def segment_softmax(self, attention_scores, splits):
+        """
+        apply soft_max on every regional node neighbors.
+
+        Parameters：
+        - attention_scores: [num_neighbors]，attention scores
+        - splits: neighbors split information
+
+        Return：
+        - attention_weights: [num_neighbors]，normalized attention scores
+        """
+        max_values = segment_csr(
+            attention_scores, splits, reduce='max', use_scatter=self.use_torch_scatter
+        )
+        max_values_expanded = max_values.repeat_interleave(
+            splits[1:] - splits[:-1], dim=0
+        )
+        attention_scores = attention_scores - max_values_expanded
+        exp_scores = torch.exp(attention_scores)
+        sum_exp = segment_csr(
+            exp_scores, splits, reduce='sum', use_scatter=self.use_torch_scatter
+        )
+        sum_exp_expanded = sum_exp.repeat_interleave(
+            splits[1:] - splits[:-1], dim=0
+        )
+        attention_weights = exp_scores / sum_exp_expanded
+        return attention_weights
 
 ############
 # GNO Encoder TODO: only for the batch data which share the same graph structure.
@@ -236,8 +311,10 @@ class GNOEncoder(nn.Module):
         self.graph_cache = None 
 
         in_kernel_in_dim = gno_config.gno_coord_dim * 2
+        coord_dim = gno_config.gno_coord_dim 
         if gno_config.node_embedding:
             in_kernel_in_dim = gno_config.gno_coord_dim * 4 * 2 * 2 # 32
+            coord_dim = gno_config.gno_coord_dim * 4 * 2
         if gno_config.in_gno_transform_type == "nonlinear" or gno_config.in_gno_transform_type == "nonlinear_kernelonly":
             in_kernel_in_dim += in_channels
         
@@ -246,7 +323,10 @@ class GNOEncoder(nn.Module):
         self.gno = IntegralTransform(
             channel_mlp_layers= gno_config.in_gno_channel_mlp_hidden_layers,
             transform_type=gno_config.in_gno_transform_type,
-            use_torch_scatter=gno_config.gno_use_torch_scatter
+            use_torch_scatter=gno_config.gno_use_torch_scatter,
+            use_attn=gno_config.use_attn,
+            coord_dim=coord_dim,
+            attention_type=gno_config.attention_type
         )
         
         self.lifting = ChannelMLP(
@@ -289,8 +369,10 @@ class GNODecoder(nn.Module):
         self.graph_cache = None
             
         out_kernel_in_dim = gno_config.gno_coord_dim * 2
+        coord_dim = gno_config.gno_coord_dim 
         if gno_config.node_embedding:
             out_kernel_in_dim = gno_config.gno_coord_dim * 4 * 2 * 2 # 32
+            coord_dim = gno_config.gno_coord_dim * 4 * 2
         out_kernel_in_dim += out_channels if gno_config.out_gno_transform_type != 'linear' else 0
         gno_config.out_gno_channel_mlp_hidden_layers.insert(0, out_kernel_in_dim)
         gno_config.out_gno_channel_mlp_hidden_layers.append(in_channels)
@@ -298,7 +380,10 @@ class GNODecoder(nn.Module):
         self.gno = IntegralTransform(
             channel_mlp_layers= gno_config.out_gno_channel_mlp_hidden_layers,
             transform_type=gno_config.out_gno_transform_type,
-            use_torch_scatter=gno_config.gno_use_torch_scatter
+            use_torch_scatter=gno_config.gno_use_torch_scatter,
+            use_attn=gno_config.use_attn,
+            coord_dim=coord_dim,
+            attention_type=gno_config.attention_type
         )
         
         self.projection = ChannelMLP(
