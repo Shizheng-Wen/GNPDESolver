@@ -9,6 +9,7 @@ from .rfno import RFNO
 from .lano import LANO
 from .lano_batch import LANOBATCH
 from .ulano import ULANO
+from .lscot import LSCOT
 
 
 from .p2r2p import Physical2Regional2Physical
@@ -18,6 +19,7 @@ from .cmpt.message_passing import MessagePassingLayerConfig
 from .cmpt.mlp import AugmentedMLPConfig
 from .cmpt.fno import FNOConfig
 from .cmpt.gno import GNOConfig
+from .cmpt.scot import SCOTConfig
 
 from ..graph import RegionInteractionGraph
 from ..utils.dataclass import shallow_asdict
@@ -35,12 +37,13 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
                             config:dataclass = None
                             )->Union[Physical2Regional2Physical, RANO, GINO]:
     
-    assert model.lower() in ["rigno", "rano", "gino", "rfno", "lano", "lano_batch", "ulano"], f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno', 'lano'. "
+    assert model.lower() in ["rigno", "rano", "gino", "rfno", "lano", "lano_batch", "ulano", "lscot"], f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno', 'lano', 'lscot'. "
     
     deepgnn_struct = OmegaConf.structured(DeepGraphNNConfig)
     attn_struct = OmegaConf.structured(TransformerConfig)
     fno_struct = OmegaConf.structured(FNOConfig)
     gno_struct = OmegaConf.structured(GNOConfig)
+    scot_struct = OmegaConf.structured(SCOTConfig)
 
     num_nodes = rigraph.regional_to_regional.num_nodes
     sqrt_num_nodes = int(math.sqrt(num_nodes))
@@ -190,6 +193,31 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
                 attn_config=attn_config,
                 regional_points=regional_points
             )
+    
+    elif model.lower() == 'lscot':
+        # TODO: beta version, revise it in the future
+        if config is None:
+            return LSCOT(
+                input_size = input_size,
+                output_size= output_size,
+                rigraph = rigraph,
+            )
+        else:
+            gno_config = OmegaConf.merge(gno_struct, config.gno)
+            # scot_config = OmegaConf.merge(scot_struct, config.scot)
+            gno_config = OmegaConf.to_object(gno_config)
+            # scot_config = OmegaConf.to_object(scot_config)
+            return LSCOT(
+                input_size = input_size, 
+                output_size = output_size,
+                rigraph = rigraph,
+                variable_mesh=variable_mesh,
+                drop_edge = drop_edge,
+                patch_size=config.patch_size,
+                gno_config=gno_config,
+                scot_config=config.scot,
+                regional_points=regional_points
+                )
     
     else:
         raise ValueError(f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno', 'lano'")

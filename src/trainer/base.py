@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from omegaconf import OmegaConf
 
-from .optimizers import AdamOptimizer, AdamWOptimizer
+from .optimizers import AdamOptimizer, AdamWOptimizer, FinetuningOptimizer
 from .utils import manual_seed, load_ckpt, save_ckpt, compute_batch_errors, compute_final_metric
 from .utils import SetUpConfig, GraphConfig, DatasetConfig
 from ..data.dataset import Metadata, DATASET_METADATA
@@ -79,11 +79,13 @@ class TrainerBase:
 
     def init_optimizer(self, optimizer_config):
         """Initialize the optimizer"""
-
-        self.optimizer = {
-            "adam": AdamOptimizer,
-            "adamw":AdamWOptimizer
-        }[self.optimizer_config["name"]](self.model.parameters(), self.optimizer_config["args"])
+        if self.optimizer_config["name"] == "finetune":
+            self.optimizer = FinetuningOptimizer(self.model, self.optimizer_config["args"])
+        else:
+            self.optimizer = {
+                "adam": AdamOptimizer,
+                "adamw": AdamWOptimizer
+            }[self.optimizer_config["name"]](self.model.parameters(), self.optimizer_config["args"])
 
 # ------------ utils ------------ #
     def to(self, device):

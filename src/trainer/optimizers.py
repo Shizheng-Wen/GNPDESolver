@@ -4,6 +4,7 @@ from tqdm import tqdm
 import numpy as np
 import time
 from copy import deepcopy
+from ..model.cmpt.scot import ConditionalLayerNorm
 
 
 
@@ -66,7 +67,7 @@ class AdamOptimizer:
             self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=config.scheduler_gamma)
         elif config.scheduler == 'mix':
             warmup_epochs = int(0.02 * self.epoch)
-            cosine_epochs = int(0.90 * self.epoch)
+            cosine_epochs = int(0.96 * self.epoch)
             exp_decay_epochs = self.epoch - warmup_epochs - cosine_epochs
             if warmup_epochs == 0:
                 warmup_epochs = 1
@@ -265,5 +266,158 @@ class AdamWOptimizer:
             "time": time_total
         }  
 
+class FinetuningOptimizer:
+    optimizer: torch.optim.Optimizer
+    scheduler: torch.optim.lr_scheduler._LRScheduler
+    epoch: int
+    loss_scale: float
+    eval_every_eps: int
+    max_grad_norm: float
+
+    def __init__(self, model, config):
+        self.epoch = config.epoch
+        self.loss_scale = config.loss_scale
+        self.eval_every_eps = config.eval_every_eps
+        self.max_grad_norm = config.max_grad_norm  
+
+        param_groups = []
+
+        # GNO Encoder and Decoder
+        encoder_decoder_params = list(model.encoder.parameters()) + list(model.decoder.parameters())
+        param_groups.append({
+            'params': encoder_decoder_params,
+            'lr': config.lr_encoder_decoder,
+            'weight_decay': config.weight_decay_encoder_decoder
+        })
+
+        # Time-Conditioned Layer in the Processor
+        time_conditioned_params = []
+        for name, module in model.processor.named_modules():
+            if isinstance(module, ConditionalLayerNorm):
+                time_conditioned_params.extend(list(module.parameters()))
+        
+        # Processor Apart from Time-Conditioned Layer
+        all_processor_params = list(model.processor.parameters())
+        time_conditioned_param_ids = set(id(p) for p in time_conditioned_params)
+        other_processor_params = [p for p in all_processor_params if id(p) not in time_conditioned_param_ids]
+
+        param_groups.append({
+            'params': time_conditioned_params,
+            'lr': config.lr_time_conditioned,
+            'weight_decay': 0.0  
+        })
+        param_groups.append({
+            'params': other_processor_params,
+            'lr': config.lr_processor_rest,
+            'weight_decay': config.weight_decay_processor_rest
+        })
+
+        self.optimizer = torch.optim.AdamW(param_groups)
+
+        if config.scheduler == 'step':
+            self.scheduler = torch.optim.lr_scheduler.StepLR(
+                self.optimizer,
+                step_size=config.scheduler_step_size,
+                gamma=config.scheduler_gamma
+            )
+        elif config.scheduler == 'cos':
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer,
+                T_max=config.scheduler_T_max,
+                eta_min=config.scheduler_eta_min
+            )
+        elif config.scheduler == 'exp':
+            self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
+                self.optimizer,
+                gamma=config.scheduler_gamma
+            )
+        elif config.scheduler == 'mix':
+            warmup_epochs = int(0.02 * self.epoch)
+            cosine_epochs = int(0.90 * self.epoch)
+            exp_decay_epochs = self.epoch - warmup_epochs - cosine_epochs
+            if warmup_epochs == 0:
+                warmup_epochs = 1
+                cosine_epochs -= 1
+            if exp_decay_epochs == 0:
+                exp_decay_epochs = 1
+                cosine_epochs -= 1
+            self.scheduler = CustomLRScheduler(
+                optimizer=self.optimizer,
+                total_epochs=self.epoch,
+                warmup_epochs=warmup_epochs,
+                cosine_epochs=cosine_epochs,
+                exp_decay_epochs=exp_decay_epochs,
+                initial_lr=config.lr_encoder_decoder,  
+                max_lr=config.max_lr,
+                min_lr=config.min_lr,
+                final_lr=config.final_lr
+            )
+        else:
+            self.scheduler = None
+
+
+    def optimize(self, trainer: 'TrainerBase', description: str = "FinetuningOptimizer", color: str = "blue"):
+        time_total = 0.0
+        best_loss, best_epoch, best_state = np.inf, -1, None
+        losses = []
+        epochs = []
+        val_epochs = []
+        val_losses = []
+
+        pbar = tqdm(total=self.epoch, desc=description, colour=color)
+        for epoch in range(self.epoch):
+            trainer.model.train()
+            total_loss = 0.0
+            for batch in trainer.train_loader:
+                start_time = time.time()
+                self.optimizer.zero_grad()
+                train_loss = trainer.train_step(batch)
+                train_loss.backward()
+                torch.nn.utils.clip_grad_norm_(trainer.model.parameters(), self.max_grad_norm) # Gradient_clip
+                self.optimizer.step()
+                total_loss += train_loss.item()
+                if trainer.device.startswith('cuda'):
+                    torch.cuda.synchronize()
+                time_total += time.time() - start_time
+
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            pbar.update(1)
+
+            if (epoch + 1) % self.eval_every_eps == 0:
+                train_loss = total_loss / len(trainer.train_loader)
+                losses.append(train_loss)
+                epochs.append(epoch)
+                val_loss = trainer.validate(trainer.val_loader)
+                pbar.set_postfix({"loss": train_loss, "val_loss": val_loss})
+                val_losses.append(val_loss)
+                val_epochs.append(epoch)
+
+                if val_loss < best_loss:
+                    best_loss = val_loss
+                    best_epoch = epoch
+                    best_state = deepcopy(trainer.model.state_dict())
+
+        if best_state is not None:
+            trainer.model.load_state_dict(best_state)
+
+        pbar.close()
+
+        return {
+            "train": {
+                "loss": losses,
+                "epoch": epochs,
+            },
+            "valid": {
+                "loss": val_losses,
+                "epoch": val_epochs,
+            },
+            "best": {
+                "epoch": best_epoch,
+                "loss": best_loss,
+            },
+            "time": time_total
+        }
 
         

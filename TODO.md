@@ -6,6 +6,12 @@
 
 
 **待做:**- 
+- [x] 看一下不同time_stepper模型的效果如何，记录下来，这个trick非常重要，决定性的，在我看来。
+- [ ] time_stepper这部分我认为有很多可以继续挖掘的部分，目前先完成poseidon的pretrain优先。
+- [x] 将poseidon pretrain的模型重新整理一下再跑一下
+- [ ] 整理一下结果，不要的config和代码再精简一下！边精简边检查，基本上把所有能想到的，可实现的功能全部实现了，可以花一个周末开始整理一下了
+
+
 - [ ] 将不想管的config和结果全部都删掉
 - [x] 对于processor部分，施加新的components，具体来说，将[U-ViT](https://arxiv.org/pdf/2209.12152) 以及ScoT施加进来，这周找[bogdan](https://arxiv.org/pdf/2409.18359)探讨一下这个方面。
 - [ ] 对于poseidon，这周末微调一下这个模型在不规则数据集上的表现，微调一下encoder和decoder

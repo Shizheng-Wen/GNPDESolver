@@ -41,3 +41,4 @@ class DatasetConfig:
     latent_queries: tuple = (64, 64)
     metric: str = "final_step"
     predict_mode: str = "all"
+    stepper_mode: str = "output"

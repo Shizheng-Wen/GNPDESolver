@@ -188,9 +188,19 @@ class SequentialTrainer(TrainerBase):
         batch_inputs, batch_outputs = batch
         batch_inputs, batch_outputs = batch_inputs.to(self.device), batch_outputs.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
         if self.model_config.use_conditional_norm:
-            pred = self.model(self.rigraph, batch_inputs[...,:-1], batch_inputs[...,0,-2:-1]) # 
+            pred = self.model(self.rigraph, batch_inputs[...,:-1], batch_inputs[...,0,-2:-1]) # [batch_size, num_nodes, num_channels]
         else:
             pred = self.model(self.rigraph, batch_inputs)
+
+        if self.dataset_config.stepper_mode == "output":
+            pass
+        elif self.dataset_config.stepper_mode == "residual":
+            pred = batch_inputs[...,:-2] + pred
+        elif self.dataset_config.stepper_mode == "time_der":
+            pred = batch_inputs[...,:-2] + batch_inputs[...,0,-2:-1][...,None] * pred
+        else:
+            raise NotImplementedError(f"stepper mode{self.dataset_config.stepper_mode} didn't support!")
+
         return self.loss_fn(pred, batch_outputs)
     
     def validate(self, loader):
@@ -198,13 +208,23 @@ class SequentialTrainer(TrainerBase):
         self.model.drop_edge = 0.0
         total_loss = 0.0
         with torch.no_grad():
-            for x_batch, y_batch in loader:
-                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
+            for batch_inputs, batch_outputs in loader:
+                batch_inputs, batch_outputs = batch_inputs.to(self.device), batch_outputs.to(self.device)
                 if self.model_config.use_conditional_norm:
-                    pred = self.model(self.rigraph, x_batch[...,:-1], x_batch[...,0,-2:-1])
+                    pred = self.model(self.rigraph, batch_inputs[...,:-1], batch_inputs[...,0,-2:-1])
                 else:
-                    pred = self.model(self.rigraph, x_batch)
-                loss = self.loss_fn(pred, y_batch)
+                    pred = self.model(self.rigraph, batch_inputs)
+                
+                if self.dataset_config.stepper_mode == "output":
+                    pass
+                elif self.dataset_config.stepper_mode == "residual":
+                    pred = batch_inputs[...,:-2] + pred
+                elif self.dataset_config.stepper_mode == "time_der":
+                    pred = batch_inputs[...,:-2] + batch_inputs[...,0,-2:-1][...,None] * pred
+                else:
+                    raise NotImplementedError(f"stepper mode{self.dataset_config.stepper_mode} didn't support!")
+                
+                loss = self.loss_fn(pred, batch_outputs)
                 total_loss += loss.item()
         return total_loss / len(loader)
     
@@ -268,7 +288,15 @@ class SequentialTrainer(TrainerBase):
                     pred = self.model(self.rigraph, x_input[...,:-1], x_input[...,0,-2:-1])
                 else:
                     pred = self.model(self.rigraph, x_input)
-                # pred shape: [batch_size, num_nodes, output_dim]
+                
+                if self.dataset_config.stepper_mode == "output":
+                    pass
+                elif self.dataset_config.stepper_mode == "residual":
+                    pred = x_input[...,:-2] + pred
+                elif self.dataset_config.stepper_mode == "time_der":
+                    pred = x_input[...,:-2] + x_input[...,0,-2:-1][...,None] * pred
+                else:
+                    raise NotImplementedError(f"stepper mode{self.dataset_config.stepper_mode} didn't support!")
 
             # Store prediction
             predictions.append(pred)

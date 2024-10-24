@@ -302,7 +302,6 @@ class Transformer(nn.Module):
         """
         x = self.input_proj(x)
         skips = []
-
         
         for layer in self.encoder_layers:
             x = layer(x, condition = condition, relative_positions=relative_positions)
