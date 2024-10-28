@@ -297,6 +297,7 @@ class TransformerBlock(nn.Module):
         kwargs.pop("num_layers")
         kwargs.pop("hidden_size")
         kwargs.pop("positional_embedding")
+        kwargs.pop("use_long_range_skip")
         return cls(input_size, output_size, **kwargs)
 
 class Transformer(nn.Module):
