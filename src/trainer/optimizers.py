@@ -4,9 +4,39 @@ from tqdm import tqdm
 import numpy as np
 import time
 from copy import deepcopy
+from dataclasses import dataclass, field
 from ..model.cmpt.scot import ConditionalLayerNorm
 
+###############
+# Config
+###############
+@dataclass
+class OptimizerargsConfig:
+    lr: float = 1e-3
+    weight_decay: float = 1e-3
+    epoch: int = 100
+    loss_scale: float = 1.0
+    eval_every_eps: int = 2
+    scheduler: str = "mix" 
 
+    # for mix scheduler
+    max_lr: float = 1e-2     
+    min_lr: float = 1e-5    
+    final_lr: float = 1e-5   
+
+    # for step scheduler
+    scheduler_step_size: int = 100 
+    scheduler_gamma: float = 0.8 
+    scheduler_T_max: int = 100 
+    scheduler_eta_min: float = 1e-4 
+
+    # for finetuning optimizer
+    max_grad_norm: float = 5.0 
+    lr_encoder_decoder: float = 5e-4 
+    lr_time_conditioned: float = 5e-4 
+    lr_processor_rest: float = 5e-5 
+    weight_decay_encoder_decoder: float = 1e-6 
+    weight_decay_processor_rest: float = 1e-6 
 
 ###############
 # Scheduler

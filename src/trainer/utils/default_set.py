@@ -1,5 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Tuple, Union
+# model default config
+from ...model.cmpt.attn import TransformerConfig
+from ...model.cmpt.deepgnn import DeepGraphNNConfig
+from ...model.cmpt.gno import GNOConfig
+from ...model.cmpt.scot import SCOTConfig
+from ...model.cmpt.fno import FNOConfig
+
+from ..optimizers import OptimizerargsConfig
 
 @dataclass
 class SetUpConfig:
@@ -13,7 +21,6 @@ class SetUpConfig:
     use_variance_test: bool = False
     measure_inf_time: bool = False
 
-
 @dataclass
 class GraphConfig:
     periodic: bool = False
@@ -24,6 +31,23 @@ class GraphConfig:
     add_dummy_node: bool = False
     with_additional_info: bool = True
     regional_points: tuple = (64, 64)
+
+@dataclass
+class ModelArgsConfig:
+    patch_size: int = 2
+    gno: GNOConfig = field(default_factory=GNOConfig)
+    transformer: TransformerConfig = field(default_factory=TransformerConfig)
+    scot: SCOTConfig = field(default_factory=SCOTConfig)
+    deepgnn: DeepGraphNNConfig = field(default_factory=DeepGraphNNConfig)
+    fno: FNOConfig = field(default_factory=FNOConfig)
+
+@dataclass
+class ModelConfig:
+    name: str = "lano"
+    drop_edge: float = 0.0
+    use_conditional_norm: bool = False
+    variable_mesh: bool = False
+    args: ModelArgsConfig = field(default_factory=ModelArgsConfig)
 
 @dataclass
 class DatasetConfig:
@@ -42,3 +66,16 @@ class DatasetConfig:
     metric: str = "final_step"
     predict_mode: str = "all"
     stepper_mode: str = "output"
+
+@dataclass
+class OptimizerConfig:
+    name: str = "adamw"
+    args: OptimizerargsConfig = field(default_factory=OptimizerargsConfig)
+
+@dataclass
+class PathConfig:
+    ckpt_path: str = ".ckpt/test/test.pt"
+    log_path: str = ".loss/test/test.png"
+    result_path: str = ".result/test/test.png"
+    database_path: str = ".database/test/test.csv"
+    

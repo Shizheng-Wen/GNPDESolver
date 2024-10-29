@@ -15,7 +15,7 @@ class GNOConfig:
     projection_channels: int = 256
     in_gno_channel_mlp_hidden_layers: list = field(default_factory=lambda: [64, 64, 64])
     out_gno_channel_mlp_hidden_layers: list = field(default_factory=lambda: [64, 64])
-    lifting_channels: int = 256
+    lifting_channels: int = 16
     gno_radius: float = 0.033
     gno_use_open3d: bool = False
     in_gno_transform_type: str = 'linear'

@@ -46,17 +46,44 @@ from transformers.models.swinv2.modeling_swinv2 import (
     window_partition,
 )
 from transformers.utils import ModelOutput
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import torch
 from torch import nn
 from typing import Optional, Union, Tuple, List
 import math
 import collections
 
+@dataclass
+class ScOTArgsConfig:
+    image_size: int = 224
+    patch_size: int = 4
+    num_channels: int = 3
+    num_out_channels: int = 1
+    embed_dim: int = 96
+    depths: List[int] = field(default_factory=lambda: [2, 2, 6, 2])
+    num_heads: List[int] = field(default_factory=lambda: [3, 6, 12, 24])
+    skip_connections: List[bool] = field(default_factory=lambda: [True, True, True])
+    window_size: int = 7
+    mlp_ratio: float = 4.0
+    qkv_bias: bool = True
+    hidden_dropout_prob: float = 0.0
+    attention_probs_dropout_prob: float = 0.0
+    drop_path_rate: float = 0.1
+    hidden_act: str = "gelu"
+    use_absolute_embeddings: bool = False
+    initializer_range: float = 0.02
+    layer_norm_eps: float = 1e-5
+    p: int = 1  # for loss: 1 for l1, 2 for l2
+    channel_slice_list_normalized_loss: Optional[List[int]] = None
+    residual_model: str = "convnext"  # "convnext" or "resnet"
+    use_conditioning: bool = False
+    learn_residual: bool = False  # learn the residual for time-dependent problems
+
 @dataclass 
 class SCOTConfig:
     model_type: str = "camlab-ethz/Poseidon-T"
     pretrain_trained: bool = True
+    args: ScOTArgsConfig = field(default_factory=ScOTArgsConfig)
 
 @dataclass
 class ScOTOutput(ModelOutput):
