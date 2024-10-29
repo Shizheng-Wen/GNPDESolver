@@ -75,7 +75,7 @@ class OptimizerConfig:
 @dataclass
 class PathConfig:
     ckpt_path: str = ".ckpt/test/test.pt"
-    log_path: str = ".loss/test/test.png"
+    loss_path: str = ".loss/test/test.png"
     result_path: str = ".result/test/test.png"
     database_path: str = ".database/test/test.csv"
     
