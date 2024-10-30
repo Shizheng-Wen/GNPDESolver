@@ -35,18 +35,15 @@ class StaticTrainer(TrainerBase):
         self.poseidon_dataset_name = ["Poisson-Gauss"]
 
         with xr.open_dataset(dataset_path) as ds:
-            # Load u as NumPy array
             u_array = ds[self.metadata.group_u].values  # Shape: [num_samples, num_timesteps, num_nodes, num_channels]
-            # Load c if available
             if self.metadata.group_c is not None:
                 c_array = ds[self.metadata.group_c].values  # Shape: [num_samples, num_timesteps, num_nodes, num_channels_c]
             else:
                 c_array = None
-            # Load x
             if self.metadata.group_x is not None:
                 x_array = ds[self.metadata.group_x].values
                 if x_array.shape[0] == u_array.shape[0]:
-                   x_array = x_array[0:1]
+                   x_array = x_array[0:1] # TODO: x_array is not constant across samples dimension.
                 self.x_train = x_array
             else:
                 domain_x = self.metadata.domain_x #([xmin, ymin], [xmax, ymax])
@@ -57,12 +54,12 @@ class StaticTrainer(TrainerBase):
                 x_grid = np.stack([xv, yv], axis=-1)  # [nx, ny, num_dims]
                 x_grid = x_grid.reshape(-1, 2)  # [num_nodes, num_dims]
                 x_grid = x_grid[None, None, ...]  # Add sample and time dimensions
-                self.x_train = x_grid # store the x array for later use
+                self.x_train = x_grid 
                 c_array = c_array.reshape(c_array.shape[0],-1)[:,None,:,None] # [num_samples, 1, num_nodes, 1]
                 u_array = u_array.reshape(u_array.shape[0],-1)[:,None,:,None] # [num_samples, 1, num_nodes, 1]
                 
 
-        if dataset_name in self.poseidon_dataset_name:
+        if dataset_name in self.poseidon_dataset_name and dataset_config.use_fullres:
             u_array = u_array[:,:,:9216,:]
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
@@ -75,9 +72,9 @@ class StaticTrainer(TrainerBase):
 
         # Compute dataset sizes
         total_samples = u_array.shape[0]
-        train_size = dataset_config["train_size"]
-        val_size = dataset_config["val_size"]
-        test_size = dataset_config["test_size"]
+        train_size = dataset_config.train_size
+        val_size = dataset_config.val_size
+        test_size = dataset_config.test_size
         assert train_size + val_size + test_size <= total_samples, "Sum of train, val, and test sizes exceeds total samples"
         assert u_array.shape[1] == 1, "Expected num_timesteps to be 1 for static datasets."
     
@@ -98,32 +95,26 @@ class StaticTrainer(TrainerBase):
         u_train_flat = u_train.reshape(-1, u_train.shape[-1])
         u_mean = np.mean(u_train_flat, axis=0)
         u_std = np.std(u_train_flat, axis=0) + EPSILON  # Avoid division by zero
-
-        # Store statistics as torch tensors
         self.u_mean = torch.tensor(u_mean, dtype=self.dtype)
         self.u_std = torch.tensor(u_std, dtype=self.dtype)
-
-        # Normalize data using NumPy operations
+        # Normalize the data
         u_train = (u_train - u_mean) / u_std
         u_val = (u_val - u_mean) / u_std
         u_test = (u_test - u_mean) / u_std
-
         # If c is used, compute statistics and normalize c
         if c_array is not None:
             c_train_flat = c_train.reshape(-1, c_train.shape[-1])
             c_mean = np.mean(c_train_flat, axis=0)
-            c_std = np.std(c_train_flat, axis=0) + EPSILON  # Avoid division by zero
-
+            c_std = np.std(c_train_flat, axis=0) + EPSILON 
             # Store statistics
             self.c_mean = torch.tensor(c_mean, dtype=self.dtype)
             self.c_std = torch.tensor(c_std, dtype=self.dtype)
-
             # Normalize c
             c_train = (c_train - c_mean) / c_std
             c_val = (c_val - c_mean) / c_std
             c_test = (c_test - c_mean) / c_std
 
-        self.x_train = torch.tensor(self.x_train, dtype=self.dtype).to(self.device)
+        self.x_train = torch.tensor(self.x_train, dtype=self.dtype).to(self.device) # self.x_train is numpy.array before
         
         c_train, u_train = torch.tensor(c_train, dtype=self.dtype), torch.tensor(u_train, dtype=self.dtype)
         c_val, u_val = torch.tensor(c_val, dtype=self.dtype), torch.tensor(u_val, dtype=self.dtype)
@@ -132,9 +123,9 @@ class StaticTrainer(TrainerBase):
         val_ds = TensorDataset(c_val, u_val)
         test_ds = TensorDataset(c_test, u_test)
 
-        self.train_loader = DataLoader(train_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
-        self.val_loader = DataLoader(val_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
-        self.test_loader = DataLoader(test_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
+        self.train_loader = DataLoader(train_ds, batch_size=dataset_config.batch_size, shuffle=dataset_config.shuffle, num_workers=dataset_config.num_workers)
+        self.val_loader = DataLoader(val_ds, batch_size=dataset_config.batch_size, shuffle=dataset_config.shuffle, num_workers=dataset_config.num_workers)
+        self.test_loader = DataLoader(test_ds, batch_size=dataset_config.batch_size, shuffle=dataset_config.shuffle, num_workers=dataset_config.num_workers)
 
     def init_graph(self, graph_config):
         graph_config = OmegaConf.to_container(graph_config, resolve=True)

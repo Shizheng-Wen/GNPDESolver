@@ -8,19 +8,9 @@ from .gino import GINO, GINOConfig
 from .rfno import RFNO
 from .lano import LANO
 from .lano_batch import LANOBATCH
-from .ulano import ULANO
 from .lscot import LSCOT
 
-
 from .p2r2p import Physical2Regional2Physical
-from .cmpt.deepgnn import DeepGraphNN,DeepGraphNNConfig
-from .cmpt.attn import TransformerConfig
-from .cmpt.message_passing import MessagePassingLayerConfig
-from .cmpt.mlp import AugmentedMLPConfig
-from .cmpt.fno import FNOConfig
-from .cmpt.gno import GNOConfig
-from .cmpt.scot import SCOTConfig
-
 from ..graph import RegionInteractionGraph
 from ..utils.dataclass import shallow_asdict
 
@@ -30,25 +20,27 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
                             drop_edge:float = 0.0,
                             variable_mesh:bool = False,
                             model:str="rigno",
-                            gnnconfig:DeepGraphNNConfig = DeepGraphNNConfig(),
-                            attnconfig:TransformerConfig = TransformerConfig(),
-                            ginoconfig:GINOConfig = GINOConfig(),
-                            gnoconfig: GNOConfig = GNOConfig(),
                             config:dataclass = None
                             )->Union[Physical2Regional2Physical, RANO, GINO]:
     
-    assert model.lower() in ["rigno", "rano", "gino", "rfno", "lano", "lano_batch", "ulano", "lscot"], f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno', 'lano', 'lscot'. "
-    
-    deepgnn_struct = OmegaConf.structured(DeepGraphNNConfig)
-    attn_struct = OmegaConf.structured(TransformerConfig)
-    fno_struct = OmegaConf.structured(FNOConfig)
-    gno_struct = OmegaConf.structured(GNOConfig)
-    scot_struct = OmegaConf.structured(SCOTConfig)
+    supported_models = [
+        "rigno",
+        "rano",
+        "gino",
+        "rfno",
+        "lano",
+        "lano_batch",
+        "lscot",
+    ]
 
+    assert model.lower() in supported_models, (
+        f"model {model} not supported, only support {supported_models} "
+    )
+    # determine the regional_points
     num_nodes = rigraph.regional_to_regional.num_nodes
     sqrt_num_nodes = int(math.sqrt(num_nodes))
     regional_points = (sqrt_num_nodes, sqrt_num_nodes)
-    
+
     if model.lower() == "rigno":
         return Physical2Regional2Physical(
             input_size   = input_size, 
@@ -56,39 +48,22 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
             rigraph      = rigraph,
             drop_edge    = drop_edge,
             variable_mesh= variable_mesh,
-            config       = gnnconfig
+            config       = config.deepgnn
         )
     
     elif model.lower() == "rano":
-        if config is None:
-            return RANO(
-                input_size = input_size,
-                output_size = output_size,
-                rigraph = rigraph,
-                drop_edge = drop_edge,
-                variable_mesh= variable_mesh,
-                gnnconfig = gnnconfig,
-                attnconfig = attnconfig,
-                regional_points= regional_points
-            )
-        else:
-            deepgnn_config = OmegaConf.merge(deepgnn_struct, config.deepgnn)
-            attn_config = OmegaConf.merge(attn_struct, config.transformer)
-            deepgnn_config = OmegaConf.to_object(deepgnn_config)
-            attn_config = OmegaConf.to_object(attn_config)
-            return RANO(
-                input_size = input_size,
-                output_size = output_size,
-                rigraph = rigraph,
-                drop_edge = drop_edge,
-                patch_size= config.patch_size,
-                variable_mesh= variable_mesh,
-                gnnconfig = deepgnn_config,
-                attnconfig = attn_config,
-                regional_points= regional_points
-            )    
+        return RANO(
+            input_size = input_size,
+            output_size = output_size,
+            rigraph = rigraph,
+            drop_edge = drop_edge,
+            variable_mesh= variable_mesh,
+            gnnconfig = config.deepgnn,
+            attnconfig = config.transformer,
+            regional_points= regional_points
+        )    
     
-    elif model.lower() == "gino":
+    elif model.lower() == "gino": #TODO: need to fix the GINO part!
         if config is None:
             config = ginoconfig
         return GINO(
@@ -98,101 +73,37 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
         )
     
     elif model.lower() == "rfno":
-        if config is None:
-            return RFNO(
+        return RFNO(
                 input_size = input_size,
                 output_size = output_size,
                 rigraph = rigraph,
+                fno_config = config.fno,
+                regional_points = regional_points 
             )
-        else:
-            deepgnn_config = OmegaConf.merge(deepgnn_struct, config.deepgnn)
-            fno_config = OmegaConf.merge(fno_struct, config.fno)
-            deepgnn_config = OmegaConf.to_object(deepgnn_config)
-            fno_config = OmegaConf.to_object(fno_config)
-            return RFNO(
-                    input_size = input_size,
-                    output_size = output_size,
-                    rigraph = rigraph,
-                    fno_config = fno_config,
-                    regional_points = regional_points 
-                )
     
     elif model.lower() == 'lano':
-        if config is None:
-            return LANO(
-                input_size = input_size,
-                output_size = output_size,
-                rigraph = rigraph,
-            )
-        else:
-            gno_config = OmegaConf.merge(gno_struct, config.gno)
-            attn_config = OmegaConf.merge(attn_struct, config.transformer)
-            gno_config = OmegaConf.to_object(gno_config)
-            attn_config = OmegaConf.to_object(attn_config)
-
-            return LANO(
-                input_size=input_size,
-                output_size=output_size,
-                rigraph=rigraph,
-                variable_mesh=variable_mesh,
-                drop_edge=drop_edge,
-                patch_size=config.patch_size,
-                gno_config=gno_config,
-                attn_config=attn_config,
-                regional_points=regional_points
-            )
+        return LANO(
+            input_size=input_size,
+            output_size=output_size,
+            rigraph=rigraph,
+            variable_mesh=variable_mesh,
+            drop_edge=drop_edge,
+            gno_config=config.gno,
+            attn_config=config.transformer,
+            regional_points=regional_points
+        )
     
     elif model.lower() == 'lano_batch':
-        if config is None:
-            return LANOBATCH(
-                input_size = input_size,
-                output_size = output_size,
-                rigraph = rigraph,
-            )
-        else:
-            gno_config = OmegaConf.merge(gno_struct, config.gno)
-            attn_config = OmegaConf.merge(attn_struct, config.transformer)
-            gno_config = OmegaConf.to_object(gno_config)
-            attn_config = OmegaConf.to_object(attn_config)
-
-            return LANOBATCH(
-                input_size=input_size,
-                output_size=output_size,
-                rigraph=rigraph,
-                variable_mesh=variable_mesh,
-                drop_edge=drop_edge,
-                patch_size=config.patch_size,
-                gno_config=gno_config,
-                attn_config=attn_config,
-                regional_points=regional_points
-            )
-    
-    elif model.lower() == 'ulano':
-        # TODO: beta version, fuse it with LANO in the future.
-        if config is None:
-            return ULANO(
-                input_size = input_size,
-                output_size = output_size,
-                rigraph = rigraph,
-            )
-        else:
-            gno_config = OmegaConf.merge(gno_struct, config.gno)
-            attn_config = OmegaConf.merge(attn_struct, config.transformer)
-            gno_config = OmegaConf.to_object(gno_config)
-            attn_config = OmegaConf.to_object(attn_config)
-
-            attn_config.use_long_range_skip = True  # ULANO requires long range skip connection
-            return ULANO(
-                input_size=input_size,
-                output_size=output_size,
-                rigraph=rigraph,
-                variable_mesh=variable_mesh,
-                drop_edge=drop_edge,
-                patch_size=config.patch_size,
-                gno_config=gno_config,
-                attn_config=attn_config,
-                regional_points=regional_points
-            )
+        return LANOBATCH(
+            input_size=input_size,
+            output_size=output_size,
+            rigraph=rigraph,
+            variable_mesh=variable_mesh,
+            drop_edge=drop_edge,
+            gno_config=config.gno,
+            attn_config=config.transformer,
+            regional_points=regional_points
+        )
     
     elif model.lower() == 'lscot':
         # TODO: beta version, revise it in the future
@@ -213,12 +124,11 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
                 rigraph = rigraph,
                 variable_mesh=variable_mesh,
                 drop_edge = drop_edge,
-                patch_size=config.patch_size,
-                gno_config=gno_config,
+                gno_config=config.gno,
                 scot_config=config.scot,
                 regional_points=regional_points
                 )
     
     else:
-        raise ValueError(f"model {model} not supported, only support `rigno`, `gino`, `rano`, 'rfno', 'lano'")
+        raise ValueError(f"model {model} not supported currently!")
 

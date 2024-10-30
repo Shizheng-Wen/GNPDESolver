@@ -15,7 +15,6 @@ class RANO(Physical2Regional2Physical):
                  rigraph:RegionInteractionGraph,
                  variable_mesh:bool = False,
                  drop_edge:float = 0.0,
-                 patch_size: int = 8,
                  gnnconfig:DeepGraphNNConfig = DeepGraphNNConfig(),
                  attnconfig:TransformerConfig = TransformerConfig(),
                  regional_points:tuple = (64,64)):
@@ -24,7 +23,7 @@ class RANO(Physical2Regional2Physical):
         self.input_size = input_size 
         self.output_size = output_size
         self.node_latent_size = gnnconfig.node_latent_size
-        self.patch_size = patch_size
+        self.patch_size = attnconfig.patch_size
         self.H = regional_points[0]
         self.W = regional_points[1]
 

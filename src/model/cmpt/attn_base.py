@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional
 from dataclasses import dataclass, asdict, field
+from omegaconf import OmegaConf
 from rotary_embedding_torch import RotaryEmbedding, apply_rotary_emb
 from .mlp import ConditionedNorm
 from ...utils.dataclass import shallow_asdict
@@ -20,6 +21,8 @@ class AttentionConfig:
     cond_norm_hidden_size:int = 4
     atten_dropout:float = 0.0
     positional_embedding: str = 'absolute'
+    H: Optional[int] = None  # Add H with a default value
+    W: Optional[int] = None  # Add W with a default value
 
 @dataclass 
 class FFNConfig:
@@ -29,6 +32,7 @@ class FFNConfig:
 
 @dataclass
 class TransformerConfig:
+    patch_size: int = 8
     hidden_size:int = 256
     use_attn_norm: bool = True
     use_ffn_norm: bool = True
@@ -111,7 +115,7 @@ class GroupQueryFlashAttention(nn.Module):
             k = k.repeat_interleave(self.num_repeat, dim=1)
             v = v.repeat_interleave(self.num_repeat, dim=1)
 
-        if relative_positions is not None and hasattr(self, "rotary_emb"):
+        if relative_positions is not None:
             q = self.rotary_emb.rotate_queries_or_keys(q)
             k = self.rotary_emb.rotate_queries_or_keys(k)
 
@@ -124,7 +128,7 @@ class GroupQueryFlashAttention(nn.Module):
 
     @classmethod
     def from_config(cls, input_size:int, output_size:int, config:AttentionConfig):
-        return cls(input_size, output_size, **asdict(config))
+        return cls(input_size, output_size, **shallow_asdict(config))
 
 class FFN(nn.Module):
     def __init__(self,
@@ -154,7 +158,7 @@ class FFN(nn.Module):
 
     @classmethod
     def from_config(cls, input_size:int, output_size:int, config:FFNConfig):
-        return cls(input_size, output_size, **asdict(config))
+        return cls(input_size, output_size, **shallow_asdict(config))
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
@@ -177,11 +181,9 @@ class TransformerBlock(nn.Module):
                 use_ffn_norm:bool = True,
                 norm_eps:float = 1e-6,
                 attn_config:AttentionConfig = AttentionConfig(),
-                ffn_config:FFNConfig = FFNConfig(),
-                skip_connection:bool = False
+                ffn_config:FFNConfig = FFNConfig()
                 ):
         super().__init__()
-                
         self.attn = GroupQueryFlashAttention.from_config(input_size, 
                                     attn_config.hidden_size, 
                                     config = attn_config)
@@ -192,15 +194,11 @@ class TransformerBlock(nn.Module):
         self.attn_norm = RMSNorm(input_size, eps=norm_eps) if use_attn_norm else None 
         self.ffn_norm  = RMSNorm(attn_config.hidden_size, eps=norm_eps) if use_ffn_norm else None 
 
-        self.skip_connection = skip_connection
-        if self.skip_connection:
-            self.skip_proj = nn.Linear(input_size + output_size, input_size)
     def forward(
         self,
         x: torch.Tensor,
         condition:Optional[float]=None,
-        relative_positions:Optional[torch.Tensor]=None,
-        skip: Optional[torch.Tensor]=None
+        relative_positions:Optional[torch.Tensor]=None
     )->torch.Tensor:
         """
         Parameters
@@ -212,10 +210,6 @@ class TransformerBlock(nn.Module):
         -------
         torch.Tensor, shape (..., seq_len, output_size)
         """
-        if self.skip_connection and skip is not None:
-            x = torch.cat([x, skip], dim=-1)
-            x = self.skip_proj(x)
-         
         h = x if self.attn_norm is None else self.attn_norm(x)
         h = x + self.attn(h, condition = condition, relative_positions=relative_positions)
         h = h if self.ffn_norm is None else self.ffn_norm(h)
@@ -225,7 +219,6 @@ class TransformerBlock(nn.Module):
     @classmethod 
     def from_config(cls,input_size:int, 
                         output_size:int, 
-                        skip_connection:bool = False,
                         config:TransformerConfig = TransformerConfig()):
         config.attn_config.positional_embedding = config.positional_embedding
         kwargs = shallow_asdict(config)
@@ -233,7 +226,8 @@ class TransformerBlock(nn.Module):
         kwargs.pop("hidden_size")
         kwargs.pop("positional_embedding")
         kwargs.pop("use_long_range_skip")
-        return cls(input_size, output_size, skip_connection=skip_connection, **kwargs)
+        kwargs.pop("patch_size")
+        return cls(input_size, output_size, **kwargs)
 
 class Transformer(nn.Module):
     def __init__(self, 
@@ -244,8 +238,6 @@ class Transformer(nn.Module):
         super().__init__()
         hidden_size:int = config.hidden_size
         num_layers:int  = config.num_layers
-        self.use_long_range_skip = config.use_long_range_skip
-
         if input_size != hidden_size:
             self.input_proj = nn.Linear(input_size, hidden_size)
         else:
@@ -256,36 +248,12 @@ class Transformer(nn.Module):
         else:
             self.output_proj = nn.Identity()
 
-
-        num_encoder_layers = num_layers // 2
-        num_decoder_layers = num_layers // 2
-        middle_layer_exists = (num_layers % 2 == 1)
-
-        self.encoder_layers = nn.ModuleList([
+        self.layers = nn.ModuleList([
             TransformerBlock.from_config(
-                input_size=hidden_size,
-                output_size=hidden_size,
-                skip_connection=False,
-                config=config
-            ) for _ in range(num_encoder_layers)
-        ])
-
-        self.middle_layer = None
-        if middle_layer_exists:
-            self.middle_layer = TransformerBlock.from_config(
-                input_size=hidden_size,
-                output_size=hidden_size,
-                skip_connection=False,
-                config=config
-            )
-
-        self.decoder_layers = nn.ModuleList([
-            TransformerBlock.from_config(
-                input_size=hidden_size,
-                output_size=hidden_size,
-                skip_connection=True,
-                config=config
-            ) for _ in range(num_decoder_layers)
+                hidden_size,
+                hidden_size,
+                config
+            ) for _ in range(config.num_layers)
         ])
 
     def forward(self, x:torch.Tensor, condition:Optional[float]=None, relative_positions:Optional[torch.Tensor]=None)->torch.Tensor:
@@ -301,18 +269,7 @@ class Transformer(nn.Module):
             [..., seq_len, output_size]
         """
         x = self.input_proj(x)
-        skips = []
-        
-        for layer in self.encoder_layers:
+        for layer in self.layers:
             x = layer(x, condition = condition, relative_positions=relative_positions)
-            skips.append(x)
-
-        if self.middle_layer is not None:
-            x = self.middle_layer(x, condition = condition, relative_positions=relative_positions)
-    
-        for layer in self.decoder_layers:
-            skip = skips.pop() if self.use_long_range_skip else None
-            x = layer(x, condition = condition, relative_positions=relative_positions, skip=skip)
-        
         x = self.output_proj(x)
         return x

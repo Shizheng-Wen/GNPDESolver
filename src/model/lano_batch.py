@@ -22,7 +22,6 @@ class LANOBATCH(Physical2Regional2Physical):
                  rigraph: RegionInteractionGraph,
                  variable_mesh: bool = False,
                  drop_edge: float = 0.0,
-                 patch_size: int = 8,
                  gno_config: GNOConfig = GNOConfig(),
                  attn_config: TransformerConfig = TransformerConfig(),
                  regional_points: tuple = (64, 64)):
@@ -31,7 +30,7 @@ class LANOBATCH(Physical2Regional2Physical):
         self.input_size = input_size
         self.output_size = output_size
         self.node_latent_size = gno_config.lifting_channels 
-        self.patch_size = patch_size
+        self.patch_size = attn_config.patch_size
         self.H = regional_points[0]
         self.W = regional_points[1]
 

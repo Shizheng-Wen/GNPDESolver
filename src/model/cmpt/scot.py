@@ -83,6 +83,7 @@ class ScOTArgsConfig:
 class SCOTConfig:
     model_type: str = "camlab-ethz/Poseidon-T"
     pretrain_trained: bool = True
+    patch_size: int = 2
     args: ScOTArgsConfig = field(default_factory=ScOTArgsConfig)
 
 @dataclass

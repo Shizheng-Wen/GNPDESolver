@@ -7,7 +7,7 @@ from omegaconf import OmegaConf
 
 from .optimizers import AdamOptimizer, AdamWOptimizer, FinetuningOptimizer
 from .utils import manual_seed, load_ckpt, save_ckpt, compute_batch_errors, compute_final_metric
-from .utils import SetUpConfig, GraphConfig, DatasetConfig
+from .utils import SetUpConfig, GraphConfig, ModelConfig, DatasetConfig, OptimizerConfig, PathConfig
 from ..data.dataset import Metadata, DATASET_METADATA
 
 class TrainerBase:
@@ -22,7 +22,11 @@ class TrainerBase:
         #construct setup
         setupconfig_struct = OmegaConf.structured(SetUpConfig)
         graphconfig_struct = OmegaConf.structured(GraphConfig)
+        modelconfig_struct = OmegaConf.structured(ModelConfig)
         datasetconfig_struct = OmegaConf.structured(DatasetConfig)
+        optimizerconfig_struct = OmegaConf.structured(OptimizerConfig)
+        path_struct = OmegaConf.structured(PathConfig)
+
 
         # Config setup
         self.config = args
@@ -35,9 +39,15 @@ class TrainerBase:
 
         self.metadata = DATASET_METADATA[self.dataset_config["metaname"]]
 
+        # Merge with default config setting
         self.setup_config = OmegaConf.merge(setupconfig_struct,self.setup_config)
         self.graph_config = OmegaConf.merge(graphconfig_struct,self.graph_config)
+        self.model_config = OmegaConf.merge(modelconfig_struct, self.model_config)
         self.dataset_config = OmegaConf.merge(datasetconfig_struct,self.dataset_config)
+        self.optimizer_config = OmegaConf.merge(optimizerconfig_struct, self.optimizer_config)
+        self.path_config = OmegaConf.merge(path_struct, self.path_config)
+
+
         self.device = self.setup_config.device
         manual_seed(self.setup_config.seed)
         if self.setup_config.dtype == "float" or \

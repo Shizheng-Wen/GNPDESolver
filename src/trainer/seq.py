@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 
 from .base import TrainerBase
-from .utils import manual_seed, create_all_to_all_pairs, DynamicPairDataset_half, TestDataset, compute_batch_errors, compute_final_metric
+from .utils import (manual_seed, DynamicPairDataset, TestDataset, 
+                    compute_batch_errors, compute_final_metric)
 
 from src.data.dataset import Metadata, DATASET_METADATA
 from src.graph import RegionInteractionGraph
@@ -24,27 +25,23 @@ class SequentialTrainer(TrainerBase):
         super().__init__(args)
     
     def init_dataset(self, dataset_config):
-        base_path = dataset_config["base_path"]
-        dataset_name = dataset_config['name']
+        base_path = dataset_config.base_path
+        dataset_name = dataset_config.name
         dataset_path = os.path.join(base_path, f"{dataset_name}.nc")
-        self.poseidon_dataset_name = ["CE-RP","CE-Gauss",
-                                      "NS-PwC","NS-SVS","NS-Gauss","NS-SL",
-                                       "ACE", "Wave-Layer"]
+        self.poseidon_dataset_name = ["CE-RP","CE-Gauss","NS-PwC",
+                                      "NS-SVS","NS-Gauss","NS-SL",
+                                      "ACE", "Wave-Layer"]
         with xr.open_dataset(dataset_path) as ds:
-            # Load u as NumPy array
             u_array = ds[self.metadata.group_u].values  # Shape: [num_samples, num_timesteps, num_nodes, num_channels]
-            # Load c if available
             if self.metadata.group_c is not None:
                 c_array = ds[self.metadata.group_c].values  # Shape: [num_samples, num_timesteps, num_nodes, num_channels_c]
             else:
                 c_array = None
-
-            # Load x
             if self.metadata.group_x is not None:
                 x_array = ds[self.metadata.group_x].values  # Shape: [1, 1, num_nodes, num_dims]
-                self.x_train = x_array # store the x array for later use
+                self.x_train = x_array 
             else:
-                # Generate x coordinates if not available (e.g., for structured grids)
+                # Generate x coordinates if not available, but sequential data doesn't need it currenty  (e.g., for structured grids)
                 domain_x = self.metadata.domain_x  # ([xmin, ymin], [xmax, ymax])
                 nx, ny = u_array.shape[2], u_array.shape[3]  # Spatial dimensions
                 x_lin = np.linspace(domain_x[0][0], domain_x[1][0], nx)
@@ -55,8 +52,8 @@ class SequentialTrainer(TrainerBase):
                 x_grid = x_grid[None, None, ...]  # Add sample and time dimensions
                 self.x_train = x_grid # store the x array for later use
         
-        if dataset_name in self.poseidon_dataset_name:
-            u_array = u_array[:,:,:9216,:] # only use the first 9216 nodes
+        if dataset_name in self.poseidon_dataset_name and dataset_config.use_fullres:
+            u_array = u_array[:,:,:9216,:] 
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
             self.x_train = self.x_train[:,:,:9216,:]
@@ -68,17 +65,15 @@ class SequentialTrainer(TrainerBase):
     
         # Compute dataset sizes
         total_samples = u_array.shape[0]
-        train_size = dataset_config["train_size"]
-        val_size = dataset_config["val_size"]
-        test_size = dataset_config["test_size"]
-
+        train_size = dataset_config.train_size
+        val_size = dataset_config.val_size
+        test_size = dataset_config.test_size
         assert train_size + val_size + test_size <= total_samples, "Sum of train, val, and test sizes exceeds total samples"
     
         # Split data into train, val, test
         u_train = u_array[:train_size]
         u_val = u_array[train_size:train_size+val_size]
         u_test = u_array[-test_size:]
-
         if c_array is not None:
             c_train = c_array[:train_size]
             c_val = c_array[train_size:train_size+val_size]
@@ -91,33 +86,31 @@ class SequentialTrainer(TrainerBase):
         u_train_flat = u_train.reshape(-1, u_train.shape[-1])
         u_mean = np.mean(u_train_flat, axis=0)
         u_std = np.std(u_train_flat, axis=0) + EPSILON  # Avoid division by zero
-
         # Store statistics as torch tensors
         self.u_mean = torch.tensor(u_mean, dtype=self.dtype)
         self.u_std = torch.tensor(u_std, dtype=self.dtype)
-        
+        # use meatadata_stats for normalizing the data.
         if dataset_config.use_metadata_stats:
             self.u_mean = torch.tensor(self.metadata.global_mean, dtype=self.dtype)
             self.u_std = torch.tensor(self.metadata.global_std, dtype=self.dtype)
-        # Normalize data using NumPy operations
-        u_train = (u_train - u_mean) / u_std
-        u_val = (u_val - u_mean) / u_std
-        u_test = (u_test - u_mean) / u_std
+        # Normalize data
+        u_train = (u_train - np.array(self.u_mean)) / np.array(self.u_std)
+        u_val = (u_val - np.array(self.u_mean)) / np.array(self.u_std)
+        u_test = (u_test - np.array(self.u_mean)) / np.array(self.u_std)
 
         # If c is used, compute statistics and normalize c
         if c_array is not None:
             c_train_flat = c_train.reshape(-1, c_train.shape[-1])
             c_mean = np.mean(c_train_flat, axis=0)
             c_std = np.std(c_train_flat, axis=0) + EPSILON  # Avoid division by zero
-
             # Store statistics
             self.c_mean = torch.tensor(c_mean, dtype=self.dtype)
             self.c_std = torch.tensor(c_std, dtype=self.dtype)
 
             # Normalize c
-            c_train = (c_train - c_mean) / c_std
-            c_val = (c_val - c_mean) / c_std
-            c_test = (c_test - c_mean) / c_std
+            c_train = (c_train - np.array(c_mean)) / np.array(c_std)
+            c_val = (c_val - np.array(c_mean)) / np.array(c_std)
+            c_test = (c_test - np.array(c_mean)) / np.array(c_std)
 
         if self.metadata.domain_t is not None:
             t_start, t_end = self.metadata.domain_t
@@ -126,17 +119,14 @@ class SequentialTrainer(TrainerBase):
             raise ValueError("metadata.domain_t is None. Cannot compute actual time values.")
     
         max_time_diff = dataset_config.get("max_time_diff", None)
-        self.train_dataset = DynamicPairDataset_half(u_train, c_train, t_values, self.metadata, max_time_diff = max_time_diff)
-        
+        self.train_dataset = DynamicPairDataset(u_train, c_train, t_values, self.metadata, max_time_diff = max_time_diff, use_time_norm = dataset_config.use_time_norm)
         self.time_stats = self.train_dataset.time_stats
-        
-        self.val_dataset = DynamicPairDataset_half(u_val, c_val, t_values, self.metadata, max_time_diff = max_time_diff, time_stats=self.time_stats)
-        self.test_dataset = DynamicPairDataset_half(u_test, c_test, t_values, self.metadata, max_time_diff = max_time_diff, time_stats=self.time_stats)
+        self.val_dataset = DynamicPairDataset(u_val, c_val, t_values, self.metadata, max_time_diff = max_time_diff, time_stats=self.time_stats, use_time_norm = dataset_config.use_time_norm)
+        self.test_dataset = DynamicPairDataset(u_test, c_test, t_values, self.metadata, max_time_diff = max_time_diff, time_stats=self.time_stats, use_time_norm = dataset_config.use_time_norm)
 
-        batch_size = dataset_config["batch_size"]
-        shuffle = dataset_config["shuffle"]
-        num_workers = dataset_config["num_workers"]
-        
+        batch_size = dataset_config.batch_size
+        shuffle = dataset_config.shuffle
+        num_workers = dataset_config.num_workers
         self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=self.collate_fn)
         self.val_loader = DataLoader(self.val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=self.collate_fn)
         self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=self.collate_fn)
