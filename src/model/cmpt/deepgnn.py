@@ -1,11 +1,11 @@
 import torch 
 import torch.nn as nn
-from dataclasses import dataclass, replace, field
+from dataclasses import dataclass, field
 from typing import Union, Tuple, Optional
 from .message_passing import MessagePassingLayer, MessagePassingLayerConfig
 from .embedder import FeatureEncoderLayer
 from ...utils.pair import make_pair, is_pair
-from ...utils.dataclass import shallow_asdict
+from ...utils.dataclass import shallow_asdict, safe_replace
 from ...graph import Graph
 
 ############
@@ -102,10 +102,10 @@ class DeepGraphNN(nn.Module):
                 edge_input_size = edge_input_size,
                 node_output_size = broadcast_fn(node_latent_size),
                 edge_output_size = edge_latent_size,
-                config = replace(mpconfig,
-                                    node_fn_config = replace(mpconfig.node_fn_config,
+                config = safe_replace(mpconfig,
+                                    node_fn_config = safe_replace(mpconfig.node_fn_config,
                                                                 use_conditional_norm = False),
-                                    edge_fn_config = replace(mpconfig.edge_fn_config,
+                                    edge_fn_config = safe_replace(mpconfig.edge_fn_config,
                                                                 use_conditional_norm = False),
                                     use_node_fn = use_node_encode,
                                     use_edge_fn = use_edge_encode
@@ -137,7 +137,7 @@ class DeepGraphNN(nn.Module):
                     config = mpconfig
                 )
             )
-
+        
         if any(make_pair(use_node_decode)) or any(make_pair(use_edge_decode)):
             # any use_node_decode or use_edge_decode is True
             self.decoder = FeatureEncoderLayer.from_config(
@@ -145,11 +145,11 @@ class DeepGraphNN(nn.Module):
                 edge_input_size = edge_latent_size,
                 node_output_size = broadcast_fn(node_output_size),
                 edge_output_size = edge_output_size,
-                config = replace(mpconfig,
-                                node_fn_config = replace(mpconfig.node_fn_config,
+                config = safe_replace(mpconfig,
+                                node_fn_config = safe_replace(mpconfig.node_fn_config,
                                                         use_layer_norm = False,
                                                         use_conditional_norm = False),
-                                edge_fn_config = replace(mpconfig.edge_fn_config,
+                                edge_fn_config = safe_replace(mpconfig.edge_fn_config,
                                                         use_layer_norm = False,
                                                         use_conditional_norm = False),
                                 use_node_fn = use_node_decode,
@@ -167,7 +167,7 @@ class DeepGraphNN(nn.Module):
         else:
             self.node_output_size = node_output_size if use_node_decode else node_latent_size
         self.edge_output_size = edge_output_size if use_edge_decode else edge_latent_size
-
+    
     def forward(self, 
                 graph:Graph,
                 ndata:Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]],
@@ -195,7 +195,6 @@ class DeepGraphNN(nn.Module):
                     node_output_size:Optional[Union[int,Tuple[int,int]]] = None,
                     edge_output_size:Optional[int] = None,
                     config:DeepGraphNNConfig = DeepGraphNNConfig()):
-
         return cls(node_input_size = node_input_size,
                     edge_input_size = edge_input_size,
                     node_output_size = node_output_size,

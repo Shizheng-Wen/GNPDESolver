@@ -13,6 +13,7 @@ from omegaconf import OmegaConf
 
 from .base import TrainerBase
 from .utils import manual_seed, compute_batch_errors, compute_final_metric
+from ..utils import shallow_asdict
 
 from src.data.dataset import Metadata, DATASET_METADATA
 from src.graph import RegionInteractionGraph
@@ -128,10 +129,9 @@ class StaticTrainer(TrainerBase):
         self.test_loader = DataLoader(test_ds, batch_size=dataset_config.batch_size, shuffle=dataset_config.shuffle, num_workers=dataset_config.num_workers)
 
     def init_graph(self, graph_config):
-        graph_config = OmegaConf.to_container(graph_config, resolve=True)
         self.rigraph = RegionInteractionGraph.from_point_cloud(points = self.x_train[0][0],
                                               phy_domain=self.metadata.domain_x,
-                                              **graph_config
+                                              **shallow_asdict(graph_config)
                                             )
         # record the number of edges
         self.config.datarow['p2r edges'] = self.rigraph.physical_to_regional.num_edges
@@ -336,10 +336,9 @@ class StaticTrainer_unstructured(StaticTrainer):
         self.test_loader = DataLoader(test_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
 
     def init_graph(self, graph_config):
-        graph_config = OmegaConf.to_container(graph_config, resolve=True)
         self.rigraph = RegionInteractionGraph.from_point_cloud(points = torch.tensor(self.coord[0][0],dtype=self.dtype),
                                               phy_domain=self.metadata.domain_x,
-                                              **graph_config
+                                              **shallow_asdict(graph_config)
                                             )
         # record the number of edges
         self.config.datarow['p2r edges'] = self.rigraph.physical_to_regional.num_edges
@@ -516,10 +515,9 @@ class StaticTrainer_test(StaticTrainer):
         self.test_loader = DataLoader(test_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
 
     def init_graph(self, graph_config):
-        graph_config = OmegaConf.to_container(graph_config, resolve=True)
         self.rigraph = RegionInteractionGraph.from_point_cloud(points = self.x_train[0][0],
                                               phy_domain=self.metadata.domain_x,
-                                              **graph_config
+                                              **shallow_asdict(graph_config)
                                             )
         # record the number of edges
         self.config.datarow['p2r edges'] = self.rigraph.physical_to_regional.num_edges

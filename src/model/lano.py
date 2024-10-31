@@ -13,7 +13,7 @@ from ..graph import RegionInteractionGraph, Graph
 
 class LANO(Physical2Regional2Physical):
     """
-    LANO: Graph Neural Operator + Vision Transformer + Graph Neural Operator
+    LANO: Graph Neural Operator + (U) Vision Transformer + Graph Neural Operator
     """
     def __init__(self,
                  input_size: int,

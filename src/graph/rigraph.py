@@ -35,7 +35,9 @@ class RegionInteractionGraph(nn.Module):
                          regional_level: int = 1,
                          add_dummy_node: bool = False,
                          with_additional_info:bool = True,
-                         regional_points: Optional[list] = None):
+                         regional_points: Optional[list] = None,
+                         fix_radius: Optional[float] = None,
+                         **kwargs):
         
         physical_points = rescale(points, (-1, 1))  
         if output_points is not None:
@@ -65,7 +67,10 @@ class RegionInteractionGraph(nn.Module):
             else:
                 _domain_shifts = None
                 regional_points = rescale(regional_points, (-1,1))
-        radii = minimal_support(regional_points, _domain_shifts)
+        if fix_radius:
+            radii = torch.full([regional_points.shape[0]], fix_radius).to(regional_points.device)
+        else:
+            radii = minimal_support(regional_points, _domain_shifts) #[num_regional_points]
         # compute physical to regional edges
         p2r_edges = radius_bipartite_graph(
             physical_points, 
@@ -104,7 +109,10 @@ class RegionInteractionGraph(nn.Module):
         # compute regional to physical edges
         # Actually, the r2p_edges can directly use the r2p_edges = torch.flip(p2r_edges, dims=(0,))
         # Under this circumstance, we don't need to recaculate the raddi anymore, use the calculated results above
-        radii = minimal_support(physical_points, _domain_shifts)
+        if fix_radius:
+            radii = torch.full([physical_points.shape[0]], fix_radius).to(physical_points.device)
+        else:
+            radii = minimal_support(physical_points, _domain_shifts) #[num_regional_points]
         if output_points is None:
             #r2p_edges = torch.flip(p2r_edges, dims=(0,))
             r2p_edges = radius_bipartite_graph(

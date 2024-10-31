@@ -21,9 +21,8 @@ class FeatureEncoderLayer(nn.Module):
                  node_fn_config:AugmentedMLPConfig = AugmentedMLPConfig(),
                  ):
         super().__init__()
-        
+
         if use_edge_fn:
-            assert edge_output_size is not None, "edge_output_size should be provided"
             self.edge_fn = AugmentedMLP.from_config(
                 input_size = edge_input_size,
                 output_size = edge_output_size,
@@ -32,7 +31,6 @@ class FeatureEncoderLayer(nn.Module):
             
         else:
             self.edge_fn = None 
-
         if use_node_fn:
             if is_pair(node_input_size):
                 self.node_fn = nn.ModuleList([
@@ -125,7 +123,6 @@ class FeatureEncoderLayer(nn.Module):
         kwargs = shallow_asdict(config)
         kwargs.pop("aggregate")
         kwargs.pop("aggregate_normalization")
-        
         return cls(node_input_size, 
                     edge_input_size, 
                     node_output_size, 

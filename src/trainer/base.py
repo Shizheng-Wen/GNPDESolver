@@ -3,11 +3,10 @@ import torch.nn as nn
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from omegaconf import OmegaConf
 
 from .optimizers import AdamOptimizer, AdamWOptimizer, FinetuningOptimizer
 from .utils import manual_seed, load_ckpt, save_ckpt, compute_batch_errors, compute_final_metric
-from .utils import SetUpConfig, GraphConfig, ModelConfig, DatasetConfig, OptimizerConfig, PathConfig
+from .utils import SetUpConfig, GraphConfig, ModelConfig, DatasetConfig, OptimizerConfig, PathConfig, merge_config
 from ..data.dataset import Metadata, DATASET_METADATA
 
 class TrainerBase:
@@ -19,34 +18,16 @@ class TrainerBase:
     ----------
     """
     def __init__(self, args):
-        #construct setup
-        setupconfig_struct = OmegaConf.structured(SetUpConfig)
-        graphconfig_struct = OmegaConf.structured(GraphConfig)
-        modelconfig_struct = OmegaConf.structured(ModelConfig)
-        datasetconfig_struct = OmegaConf.structured(DatasetConfig)
-        optimizerconfig_struct = OmegaConf.structured(OptimizerConfig)
-        path_struct = OmegaConf.structured(PathConfig)
-
-
         # Config setup
         self.config = args
-        self.setup_config = self.config.setup
-        self.graph_config = self.config.graph
-        self.model_config = self.config.model
-        self.dataset_config = self.config.dataset
-        self.optimizer_config = self.config.optimizer
-        self.path_config = self.config.path
-
-        self.metadata = DATASET_METADATA[self.dataset_config["metaname"]]
-
-        # Merge with default config setting
-        self.setup_config = OmegaConf.merge(setupconfig_struct,self.setup_config)
-        self.graph_config = OmegaConf.merge(graphconfig_struct,self.graph_config)
-        self.model_config = OmegaConf.merge(modelconfig_struct, self.model_config)
-        self.dataset_config = OmegaConf.merge(datasetconfig_struct,self.dataset_config)
-        self.optimizer_config = OmegaConf.merge(optimizerconfig_struct, self.optimizer_config)
-        self.path_config = OmegaConf.merge(path_struct, self.path_config)
-
+        self.setup_config = merge_config(SetUpConfig, self.config.setup)
+        self.graph_config = merge_config(GraphConfig, self.config.graph)
+        self.model_config = merge_config(ModelConfig, self.config.model)
+        self.dataset_config = merge_config(DatasetConfig, self.config.dataset)
+        self.optimizer_config = merge_config(OptimizerConfig, self.config.optimizer)
+        self.path_config = merge_config(PathConfig, self.config.path)
+        
+        self.metadata = DATASET_METADATA[self.dataset_config.metaname]
 
         self.device = self.setup_config.device
         manual_seed(self.setup_config.seed)
@@ -89,13 +70,13 @@ class TrainerBase:
 
     def init_optimizer(self, optimizer_config):
         """Initialize the optimizer"""
-        if self.optimizer_config["name"] == "finetune":
-            self.optimizer = FinetuningOptimizer(self.model, self.optimizer_config["args"])
+        if self.optimizer_config.name == "finetune":
+            self.optimizer = FinetuningOptimizer(self.model, self.optimizer_config.args)
         else:
             self.optimizer = {
                 "adam": AdamOptimizer,
                 "adamw": AdamWOptimizer
-            }[self.optimizer_config["name"]](self.model.parameters(), self.optimizer_config["args"])
+            }[self.optimizer_config.name](self.model.parameters(), self.optimizer_config.args)
 
 # ------------ utils ------------ #
     def to(self, device):
@@ -109,13 +90,13 @@ class TrainerBase:
         self.test_loader.type(dtype)
 
     def load_ckpt(self):
-        load_ckpt(self.path_config["ckpt_path"], model = self.model)
+        load_ckpt(self.path_config.ckpt_path, model = self.model)
         return self
     
     def save_ckpt(self):
         """Save checkpoint to the config.ckpt_path"""
-        os.makedirs(os.path.dirname(self.path_config["ckpt_path"]), exist_ok=True)
-        save_ckpt(self.path_config["ckpt_path"], model = self.model)
+        os.makedirs(os.path.dirname(self.path_config.ckpt_path), exist_ok=True)
+        save_ckpt(self.path_config.ckpt_path, model = self.model)
 
         return self
 
@@ -227,8 +208,8 @@ class TrainerBase:
             ax[1].set_xlim(left=0)
             if (np.array(val_losses) > 0).all():
                 ax[1].set_yscale('log')
-            plt.savefig(self.path_config["loss_path"])
-            np.savez(self.path_config["loss_path"][:-4]+".npz", epochs=epochs, losses=losses, val_epochs=val_epochs, val_losses=val_losses)
+            plt.savefig(self.path_config.loss_path)
+            np.savez(self.path_config.loss_path[:-4]+".npz", epochs=epochs, losses=losses, val_epochs=val_epochs, val_losses=val_losses)
 
     def plot_results(self):
         raise NotImplementedError

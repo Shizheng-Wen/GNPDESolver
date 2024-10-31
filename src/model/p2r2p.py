@@ -1,7 +1,6 @@
 import torch 
 import torch.nn as nn
 from typing import Tuple, Optional, Union
-from dataclasses import replace
 from .cmpt.deepgnn import DeepGraphNN, DeepGraphNNConfig
 from ..utils.pair import make_pair
 from ..utils.dataclass import safe_replace
@@ -31,17 +30,17 @@ class Physical2Regional2Physical(nn.Module):
     def init_encoder(self, node_input_size:int, 
                         rigraph:RegionInteractionGraph,
                         config):
-
         return DeepGraphNN.from_config(
             node_input_size = (node_input_size + rigraph.physical_to_regional.ndim[0], rigraph.physical_to_regional.ndim[1]),
             edge_input_size = rigraph.physical_to_regional.edim,
-            config = replace(config,
+            config = safe_replace(config,
                     use_node_encode = True, # it will be broadcasted to pair
                     use_edge_encode = True,
                     use_node_decode = False, 
                     use_edge_decode = False,
                     num_message_passing_steps = 1)
-        )
+            )   
+
 
     def init_processor(self, 
                        rigraph:RegionInteractionGraph, 
@@ -49,7 +48,7 @@ class Physical2Regional2Physical(nn.Module):
         return DeepGraphNN.from_config(
             node_input_size = self.node_latent_size,
             edge_input_size = rigraph.regional_to_regional.edim,
-            config = replace(config,
+            config = safe_replace(config,
                              use_node_encode=False, 
                              use_edge_encode=True,
                              use_node_decode=False,
@@ -64,7 +63,7 @@ class Physical2Regional2Physical(nn.Module):
             node_input_size  = (self.node_latent_size, self.node_latent_size),
             edge_input_size  = rigraph.regional_to_physical.edim,
             node_output_size = output_size,
-            config = replace(config,
+            config = safe_replace(config,
                       use_node_encode = (False, False) if variable_mesh else (True, False),
                       use_edge_encode = True,
                       use_node_decode = (True, False),

@@ -4,7 +4,6 @@ from torch.utils.data import DataLoader, TensorDataset
 import xarray as xr
 import numpy as np
 from tqdm import tqdm
-from omegaconf import OmegaConf
 
 import matplotlib.pyplot as plt
 import matplotlib.tri as tri
@@ -12,6 +11,7 @@ import matplotlib.tri as tri
 from .base import TrainerBase
 from .utils import (manual_seed, DynamicPairDataset, TestDataset, 
                     compute_batch_errors, compute_final_metric)
+from ..utils import shallow_asdict
 
 from src.data.dataset import Metadata, DATASET_METADATA
 from src.graph import RegionInteractionGraph
@@ -118,7 +118,7 @@ class SequentialTrainer(TrainerBase):
         else:
             raise ValueError("metadata.domain_t is None. Cannot compute actual time values.")
     
-        max_time_diff = dataset_config.get("max_time_diff", None)
+        max_time_diff = getattr(dataset_config, "max_time_diff", None)
         self.train_dataset = DynamicPairDataset(u_train, c_train, t_values, self.metadata, max_time_diff = max_time_diff, use_time_norm = dataset_config.use_time_norm)
         self.time_stats = self.train_dataset.time_stats
         self.val_dataset = DynamicPairDataset(u_val, c_val, t_values, self.metadata, max_time_diff = max_time_diff, time_stats=self.time_stats, use_time_norm = dataset_config.use_time_norm)
@@ -142,10 +142,9 @@ class SequentialTrainer(TrainerBase):
         return inputs, outputs
 
     def init_graph(self, graph_config):
-        graph_config = OmegaConf.to_container(graph_config, resolve=True)
         self.rigraph = RegionInteractionGraph.from_point_cloud(points = self.x_train[0][0],
                                               phy_domain=self.metadata.domain_x,
-                                              **graph_config
+                                              **shallow_asdict(graph_config)
                                             )
         # record the number of edges
         self.config.datarow['p2r edges'] = self.rigraph.physical_to_regional.num_edges

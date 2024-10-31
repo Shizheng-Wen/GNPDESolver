@@ -105,11 +105,10 @@ def edge_pos_encode(u:torch.Tensor,
 
     z_uv = z_uv / max_edge_length
     d_uv = d_uv / max_edge_length
-    edata = torch.cat([z_uv, d_uv], axis=-1) # [n_edges, 2*n_dim+1]
-
+    edata_struc = torch.cat([z_uv, d_uv], axis=-1) # [n_edges, 2*n_dim+1]
     if edata is not None:
-        edata = torch.cat([edata, edata], axis=-1)
-    return edata
+        edata = torch.cat([edata_struc, edata], axis=-1)
+    return edata_struc
 
 def add_dummy(x:torch.Tensor)->torch.Tensor:
     """

@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from dataclasses import dataclass, asdict
 from typing import Optional, Callable
 
+from ...utils.dataclass import shallow_asdict, safe_replace
+
 
 ############
 # Config
@@ -220,7 +222,7 @@ class AugmentedMLP(nn.Module):
                     input_size:int,
                     output_size:int, 
                     config:AugmentedMLPConfig):
-        return cls(input_size, output_size, **asdict(config))
+        return cls(input_size, output_size, **shallow_asdict(config))
 
 class ChannelMLP(nn.Module):
     """ChannelMLP applies an arbitrary number of layers of 

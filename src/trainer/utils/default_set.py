@@ -7,8 +7,14 @@ from ...model.cmpt.deepgnn import DeepGraphNNConfig
 from ...model.cmpt.gno import GNOConfig
 from ...model.cmpt.scot import SCOTConfig
 from ...model.cmpt.fno import FNOConfig
-
 from ..optimizers import OptimizerargsConfig
+
+from omegaconf import OmegaConf
+
+def merge_config(default_config_class, user_config):
+    default_config_struct = OmegaConf.structured(default_config_class)
+    merged_config = OmegaConf.merge(default_config_struct, user_config)
+    return OmegaConf.to_object(merged_config)
 
 @dataclass
 class SetUpConfig:
@@ -33,6 +39,7 @@ class GraphConfig:
     add_dummy_node: bool = False    
     with_additional_info: bool = True
     regional_points: tuple = (64, 64)
+    fix_radius: Optional[float] = None                                      # Whether to use the fix radius for building graph
 
 @dataclass
 class ModelArgsConfig:
@@ -80,4 +87,5 @@ class PathConfig:
     loss_path: str = ".loss/test/test.png"
     result_path: str = ".result/test/test.png"
     database_path: str = ".database/test/test.csv"
-    
+
+

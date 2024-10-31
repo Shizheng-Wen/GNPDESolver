@@ -27,7 +27,6 @@
         "use_conditional_norm": false,
         "variable_mesh": false,
         "args":{
-            "patch_size": 2,
             "deepgnn": {
                 "node_latent_size": 16,
                 "edge_latent_size": 16,
@@ -60,11 +59,14 @@
                 }
             },
             "transformer": {
+                "patch_size": 2,
                 "hidden_size": 256,
                 "use_attn_norm": true,
                 "use_ffn_norm": true,
                 "norm_eps": 1e-6,
-                "num_layers": 3,
+                "num_layers": 5,
+                "positional_embedding": "rope",
+                "use_long_range_skip": true,
                 "attn_config": {
                     "hidden_size": 256,
                     "num_heads": 8,
@@ -91,24 +93,22 @@
         "batch_size": 64,
         "num_workers": 4,
         "shuffle": true,
-        "latent_queries": [64, 64],
         "metric": "final_step",
         "predict_mode": "autoregressive"
     },
 
     "optimizer": {
-        "name": "adam",
+        "name": "adamw",
         "args": {
             "lr": 1e-3,
+            "weight_decay": 1e-2,
             "epoch": 500,
-            "batch_size": 32,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
-            "scheduler": "step",
-            "scheduler_step_size": 100,
-            "scheduler_gamma": 0.8,
-            "scheduler_T_max": 100,
-            "scheduler_eta_min": 1e-4
+            "scheduler": "mix",
+            "max_lr": 5e-3,
+            "min_lr": 1e-3,
+            "final_lr": 5e-4
         }
     },
 

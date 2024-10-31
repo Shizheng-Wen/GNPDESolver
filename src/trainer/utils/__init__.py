@@ -1,7 +1,7 @@
 from .data_pairs import DynamicPairDataset, TestDataset
 from .cal_metric import compute_batch_errors, compute_final_metric
 from .train_setup import manual_seed, init_random_seed, save_ckpt, load_ckpt
-from .default_set import SetUpConfig, GraphConfig, ModelConfig, DatasetConfig, OptimizerConfig, PathConfig
+from .default_set import SetUpConfig, GraphConfig, ModelConfig, DatasetConfig, OptimizerConfig, PathConfig, merge_config
 
 __all__ = [ 
            "DynamicPairDataset", 
@@ -18,4 +18,5 @@ __all__ = [
            "DatasetConfig"
            "OptimizerConfig"
            "PathConfig"
+           "merge_config"
            ]
