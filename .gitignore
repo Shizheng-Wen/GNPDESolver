@@ -15,3 +15,5 @@ slurmjob/
 config/*
 !config/tpl/
 !config/tpl/**
+
+config1/*

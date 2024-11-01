@@ -302,10 +302,10 @@ class SequentialTrainer(TrainerBase):
         self.model.to(self.device)
         self.model.drop_edge = 0.0
 
-        if self.dataset_config["predict_mode"] == "all":
+        if self.dataset_config.predict_mode == "all":
             modes = ["autoregressive", "direct", "star"]
         else:
-            modes = [self.dataset_config["predict_mode"]]
+            modes = [self.dataset_config.predict_mode]
 
         errors_dict = {}
         example_data = None # To store for plotting
@@ -355,18 +355,18 @@ class SequentialTrainer(TrainerBase):
                     pred = self.autoregressive_predict(x_batch, time_indices) # Shape: [batch_size, num_timesteps - 1, num_nodes, num_channels]
                     pred_de_norm = pred * self.u_std.to(self.device) + self.u_mean.to(self.device)
                     y_batch_de_norm = y_batch * self.u_std.to(self.device) + self.u_mean.to(self.device)
-                    if self.dataset_config["metric"] == "final_step":
+                    if self.dataset_config.metric == "final_step":
                         relative_errors = compute_batch_errors(
                             y_batch_de_norm[:,-1,:,:][:,None,:,:], 
                             pred_de_norm[:,-1,:,:][:,None,:,:], 
                             self.metadata)
-                    elif self.dataset_config["metric"] == "all_step":
+                    elif self.dataset_config.metric == "all_step":
                         relative_errors = compute_batch_errors(
                             y_batch_de_norm, 
                             pred_de_norm, 
                             self.metadata)
                     else:
-                        raise ValueError(f"Unknown metric: {self.dataset_config['metric']}")
+                        raise ValueError(f"Unknown metric: {self.dataset_config.metric}")
                     all_relative_errors.append(relative_errors)
                     pbar.update(1)
                     # Store example data for plotting (only once)
@@ -385,12 +385,12 @@ class SequentialTrainer(TrainerBase):
             final_metric = compute_final_metric(all_relative_errors)
             errors_dict[mode] = final_metric
         print(errors_dict)
-        if self.dataset_config["predict_mode"] == "all":
+        if self.dataset_config.predict_mode == "all":
             self.config.datarow["relative error (direct)"] = errors_dict["direct"]
             self.config.datarow["relative error (auto2)"] = errors_dict["autoregressive"]
             self.config.datarow["relative error (auto4)"] = errors_dict["star"]
         else:
-            mode = self.dataset_config["predict_mode"]
+            mode = self.dataset_config.predict_mode
             self.config.datarow[f"relative error ({mode})"] = errors_dict[mode]
 
         if example_data is not None:
@@ -489,7 +489,7 @@ class SequentialTrainer(TrainerBase):
                 plt.colorbar(ct_error, ax=ax_error)
 
         plt.tight_layout()
-        plt.savefig(self.path_config["result_path"])
+        plt.savefig(self.path_config.result_path)
         plt.close()
 
     def measure_inference_time(self):

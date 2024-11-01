@@ -41,7 +41,6 @@ class Physical2Regional2Physical(nn.Module):
                     num_message_passing_steps = 1)
             )   
 
-
     def init_processor(self, 
                        rigraph:RegionInteractionGraph, 
                        config):
