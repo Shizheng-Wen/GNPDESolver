@@ -71,13 +71,24 @@ class SequentialTrainer(TrainerBase):
         assert train_size + val_size + test_size <= total_samples, "Sum of train, val, and test sizes exceeds total samples"
     
         # Split data into train, val, test
-        u_train = u_array[:train_size]
-        u_val = u_array[train_size:train_size+val_size]
-        u_test = u_array[-test_size:]
+        if dataset_config.rand_dataset:
+            indices = np.random.permutation(len(u_array))
+        else:
+            indices = np.arange(len(u_array))
+        
+        train_indices = indices[:train_size]
+        val_indices = indices[train_size:train_size+val_size]
+        test_indices = indices[-test_size:]
+
+        # Split data into train, val, test
+        u_train = u_array[train_indices]
+        u_val = u_array[val_indices]
+        u_test = u_array[test_indices]
+
         if c_array is not None:
-            c_train = c_array[:train_size]
-            c_val = c_array[train_size:train_size+val_size]
-            c_test = c_array[-test_size:]
+            c_train = c_array[train_indices]
+            c_val = c_array[val_indices]
+            c_test = c_array[test_indices]
         else:
             c_train = c_val = c_test = None
 

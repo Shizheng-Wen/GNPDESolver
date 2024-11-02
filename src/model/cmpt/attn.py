@@ -19,7 +19,7 @@ class AttentionConfig:
     num_kv_heads:int = 8
     use_conditional_norm:bool = False
     cond_norm_hidden_size:int = 4
-    atten_dropout:float = 0.0
+    atten_dropout:float = 0.1
     positional_embedding: str = 'absolute'
     H: Optional[int] = None  # Add H with a default value
     W: Optional[int] = None  # Add W with a default value

@@ -67,6 +67,7 @@ class DatasetConfig:
     train_size: int = 1024
     val_size: int = 128
     test_size: int = 256
+    rand_dataset: bool = False                                              # Whether to randomize the sequence of loaded dataset
     max_time_diff: int = 14                                                 # Max time difference        
     use_time_norm: bool = True                                              # whether to use normalization for lead time and time_difference
     batch_size: int = 64
