@@ -60,7 +60,7 @@ class StaticTrainer(TrainerBase):
                 u_array = u_array.reshape(u_array.shape[0],-1)[:,None,:,None] # [num_samples, 1, num_nodes, 1]
                 
 
-        if dataset_name in self.poseidon_dataset_name and dataset_config.use_fullres:
+        if dataset_name in self.poseidon_dataset_name and dataset_config.use_sparse:
             u_array = u_array[:,:,:9216,:]
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
@@ -267,7 +267,7 @@ class StaticTrainer_unstructured(StaticTrainer):
                 u_array = u_array.reshape(u_array.shape[0],-1)[:,None,:,None] # [num_samples, 1, num_nodes, 1]
                 
 
-        if dataset_name in self.poseidon_dataset_name:
+        if dataset_name in self.poseidon_dataset_name and dataset_config.use_sparse:
             u_array = u_array[:,:,:9216,:]
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
@@ -452,7 +452,7 @@ class StaticTrainer_test(StaticTrainer):
                 u_array = u_array.reshape(u_array.shape[0],-1)[:,None,:,None] # [num_samples, 1, num_nodes, 1]
                 
 
-        if dataset_name in self.poseidon_dataset_name:
+        if dataset_name in self.poseidon_dataset_name and dataset_config.use_sparse:
             u_array = u_array[:,:,:9216,:]
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]

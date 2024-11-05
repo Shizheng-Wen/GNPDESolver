@@ -52,7 +52,7 @@ class SequentialTrainer(TrainerBase):
                 x_grid = x_grid[None, None, ...]  # Add sample and time dimensions
                 self.x_train = x_grid # store the x array for later use
         
-        if dataset_name in self.poseidon_dataset_name and dataset_config.use_fullres:
+        if dataset_name in self.poseidon_dataset_name and dataset_config.use_sparse:
             u_array = u_array[:,:,:9216,:] 
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
