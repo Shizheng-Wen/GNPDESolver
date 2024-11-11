@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 import torch
 
 class DynamicPairDataset(Dataset):
-    def __init__(self, u_data, c_data, t_values, metadata, max_time_diff=14, time_stats=None, use_time_norm=True):
+    def __init__(self, u_data, c_data, t_values, metadata, max_time_diff=14, stepper_mode="output", stats=None, use_time_norm=True):
         """
         Custom Dataset that generates specific time pairs for training.
 
@@ -14,12 +14,16 @@ class DynamicPairDataset(Dataset):
             t_values (numpy.ndarray): Actual time values corresponding to timesteps
             metadata (Metadata): Metadata object containing domain information
             max_time_diff (int): Maximum allowed time difference between t_out and t_in
-            time_stats (dict): Dictionary to store time statistics
+            stepper_mode (str): Stepper mode for the model [output, residual, time_der]
+            stats (dict): Dictionary to store statistics for all variables
+            use_time_norm (bool): Normalize time features or not
         """
         self.u_data = u_data
         self.c_data = c_data
         self.t_values = t_values  # Shape: [num_timesteps]
         self.metadata = metadata
+        self.stepper_mode = stepper_mode
+        self.stats = stats
         self.num_samples, self.num_timesteps, self.num_nodes, self.num_vars = u_data.shape
 
         # if max_time_diff = 14, Only use the first 15 time steps
@@ -46,35 +50,26 @@ class DynamicPairDataset(Dataset):
 
         self.start_times = self.t_values[self.t_in_indices] # Shape: [num_time_pairs]
 
-        # Compute time statistics if not provided
-        if time_stats is None:
-            self.start_times_mean = np.mean(self.start_times)
-            self.start_times_std = np.std(self.start_times) + 1e-10
-            self.time_diffs_mean = np.mean(self.time_diffs)
-            self.time_diffs_std = np.std(self.time_diffs) + 1e-10
-            if not use_time_norm:
-                self.start_times_mean = 0.0
-                self.start_times_std = 1.0
-                self.time_diffs_mean = 0.0
-                self.time_diffs_std = 1.0
-
-            self.time_stats = {
-                'start_times_mean': self.start_times_mean,
-                'start_times_std': self.start_times_std,
-                'time_diffs_mean': self.time_diffs_mean,
-                'time_diffs_std': self.time_diffs_std,
-            }
+        self.start_times_mean = np.mean(self.start_times)
+        self.start_times_std = np.std(self.start_times) + 1e-10
+        self.time_diffs_mean = np.mean(self.time_diffs)
+        self.time_diffs_std = np.std(self.time_diffs) + 1e-10
+        if not use_time_norm:
+            self.start_times_mean = 0.0
+            self.start_times_std = 1.0
+            self.time_diffs_mean = 0.0
+            self.time_diffs_std = 1.0
         
-        else:
-            self.time_stats = time_stats
-            self.start_times_mean = time_stats['start_times_mean']
-            self.start_times_std = time_stats['start_times_std']
-            self.time_diffs_mean = time_stats['time_diffs_mean']
-            self.time_diffs_std = time_stats['time_diffs_std']
+        self.stats["start_time"] = {}
+        self.stats["time_diffs"] = {}
+        self.stats["start_time"]["mean"] = self.start_times_mean
+        self.stats["start_time"]["std"] = self.start_times_std
+        self.stats["time_diffs"]["mean"] = self.time_diffs_mean
+        self.stats["time_diffs"]["std"] = self.time_diffs_std
         
         # precompute the normalized time features for all time pairs
-        self.start_times_norm = (self.start_times - self.start_times_mean) / self.start_times_std
-        self.time_diffs_norm = (self.time_diffs - self.time_diffs_mean) / self.time_diffs_std
+        self.start_times_norm = (self.start_times - self.stats["start_time"]["mean"]) / self.stats["start_time"]["std"]
+        self.time_diffs_norm = (self.time_diffs - self.stats["time_diffs"]["mean"]) / self.stats["time_diffs"]["std"]
 
         self.start_time_expanded = np.tile(self.start_times_norm[:, np.newaxis], (1, self.num_nodes)) # Shape: [num_time_pairs, num_nodes]
         self.time_diff_expanded = np.tile(self.time_diffs_norm[:, np.newaxis], (1, self.num_nodes)) # Shape: [num_time_pairs, num_nodes]
@@ -96,28 +91,39 @@ class DynamicPairDataset(Dataset):
 
         # Fetch data for the given indices
         u_in = self.u_data[sample_idx, t_in_idx]  # Input at t_in, Shape: [num_nodes, num_vars]
+        u_in_norm = (u_in - self.stats["u"]["mean"]) / self.stats["u"]["std"]
         u_out = self.u_data[sample_idx, t_out_idx]  # Output at t_out, Shape: [num_nodes, num_vars]
-
-        # Fetch time features
-        start_time_expanded = self.start_time_expanded[time_pair_idx] # Shape: [num_nodes, 1]
-        time_diff_expanded = self.time_diff_expanded[time_pair_idx] # Shape: [num_nodes, 1]
 
         # If c_data is available
         if self.c_data is not None:
             c_in = self.c_data[sample_idx, t_in_idx]
+            c_in_norm = (c_in - self.stats["c"]["mean"]) / self.stats["c"]["std"]
         else:
             c_in = None
 
         # Prepare input features
-        input_features = [u_in]
+        input_features = [u_in_norm]
         if c_in is not None:
-            input_features.append(c_in)
+            input_features.append(c_in_norm)
         input_features = np.concatenate(input_features, axis=-1)
 
+        # Fetch time features
+        start_time_expanded = self.start_time_expanded[time_pair_idx] # Shape: [num_nodes, 1]
+        time_diff_expanded = self.time_diff_expanded[time_pair_idx] # Shape: [num_nodes, 1]
         # Add normalized time features (expanded to match num_nodes)
         input_features = np.concatenate([input_features, start_time_expanded, time_diff_expanded], axis=-1)
 
-        return input_features, u_out
+        if self.stepper_mode == "output":
+            target = (u_out - self.stats["u"]["mean"]) / self.stats["u"]["std"]
+        elif self.stepper_mode == "residual":
+            target = ((u_out - u_in) - self.stats["res"]["mean"]) / self.stats["res"]["std"]
+        elif self.stepper_mode == "time_der":
+            time_diff = self.time_diffs[time_pair_idx]
+            target = ((u_out - u_in) / time_diff - self.stats["der"]["mean"]) / self.stats["der"]["std"]
+        else:
+            raise ValueError(f"Invalid stepper mode: {self.stepper_mode}")
+
+        return input_features, target
 
 class TestDataset(Dataset):
     def __init__(self, u_data, c_data, t_values, metadata, time_indices):

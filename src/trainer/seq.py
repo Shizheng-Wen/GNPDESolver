@@ -93,48 +93,55 @@ class SequentialTrainer(TrainerBase):
             c_train = c_val = c_test = None
 
         # Compute dataset statistics from training data
-        # Reshape u_train to [num_samples * num_timesteps * num_nodes, num_active_vars]
-        u_train_flat = u_train.reshape(-1, u_train.shape[-1])
-        u_mean = np.mean(u_train_flat, axis=0)
-        u_std = np.std(u_train_flat, axis=0) + EPSILON  # Avoid division by zero
-        # Store statistics as torch tensors
-        self.u_mean = torch.tensor(u_mean, dtype=self.dtype)
-        self.u_std = torch.tensor(u_std, dtype=self.dtype)
-        # use meatadata_stats for normalizing the data.
-        if dataset_config.use_metadata_stats:
-            self.u_mean = torch.tensor(self.metadata.global_mean, dtype=self.dtype)
-            self.u_std = torch.tensor(self.metadata.global_std, dtype=self.dtype)
-        # Normalize data
-        u_train = (u_train - np.array(self.u_mean)) / np.array(self.u_std)
-        u_val = (u_val - np.array(self.u_mean)) / np.array(self.u_std)
-        u_test = (u_test - np.array(self.u_mean)) / np.array(self.u_std)
+        self.stats = {}
+        self.stats["u"] = {}
+        self.stats["res"] = {}
+        self.stats["der"] = {}
 
-        # If c is used, compute statistics and normalize c
+        self.stats["u"]["mean"] = np.mean(u_train, axis=(0,1,2))  # Shape: [num_active_vars]
+        self.stats["u"]["std"] = np.std(u_train, axis=(0,1,2)) + EPSILON
+        if dataset_config.use_metadata_stats:
+            self.stats["u"]["mean"] = self.metadata.global_mean
+            self.stats["u"]["std"] = self.metadata.global_std
         if c_array is not None:
+            self.stats["c"] = {}
             c_train_flat = c_train.reshape(-1, c_train.shape[-1])
             c_mean = np.mean(c_train_flat, axis=0)
             c_std = np.std(c_train_flat, axis=0) + EPSILON  # Avoid division by zero
             # Store statistics
-            self.c_mean = torch.tensor(c_mean, dtype=self.dtype)
-            self.c_std = torch.tensor(c_std, dtype=self.dtype)
-
-            # Normalize c
-            c_train = (c_train - np.array(c_mean)) / np.array(c_std)
-            c_val = (c_val - np.array(c_mean)) / np.array(c_std)
-            c_test = (c_test - np.array(c_mean)) / np.array(c_std)
+            self.stats["c"]["mean"] = c_mean
+            self.stats["c"]["std"] = c_std
 
         if self.metadata.domain_t is not None:
             t_start, t_end = self.metadata.domain_t
             t_values = np.linspace(t_start, t_end, u_array.shape[1]) # shape: [num_timesteps]
         else:
             raise ValueError("metadata.domain_t is None. Cannot compute actual time values.")
-    
-        max_time_diff = getattr(dataset_config, "max_time_diff", None)
-        self.train_dataset = DynamicPairDataset(u_train, c_train, t_values, self.metadata, max_time_diff = max_time_diff, use_time_norm = dataset_config.use_time_norm)
-        self.time_stats = self.train_dataset.time_stats
-        self.val_dataset = DynamicPairDataset(u_val, c_val, t_values, self.metadata, max_time_diff = max_time_diff, time_stats=self.time_stats, use_time_norm = dataset_config.use_time_norm)
-        self.test_dataset = DynamicPairDataset(u_test, c_test, t_values, self.metadata, max_time_diff = max_time_diff, time_stats=self.time_stats, use_time_norm = dataset_config.use_time_norm)
 
+        self.stats["res"]["mean"] = np.mean(u_train[:,1:] - u_train[:,:-1], axis=(0,1,2))  # Shape: [num_active_vars]
+        self.stats["res"]["std"] = np.std(u_train[:,1:] - u_train[:,:-1], axis=(0,1,2)) + EPSILON
+        t_difference = t_values[1:] - t_values[:-1]
+        self.stats["der"]["mean"] = np.mean((u_train[:,1:] - u_train[:,:-1]) / t_difference[None,:,None,None], axis=(0,1,2))
+        self.stats["der"]["std"] = np.std((u_train[:,1:] - u_train[:,:-1]) / t_difference[None,:,None,None], axis=(0,1,2)) + EPSILON
+
+        max_time_diff = getattr(dataset_config, "max_time_diff", None)
+        self.train_dataset = DynamicPairDataset(u_train, c_train, t_values, self.metadata, 
+                                                max_time_diff = max_time_diff, 
+                                                stepper_mode=dataset_config.stepper_mode,
+                                                stats=self.stats,
+                                                use_time_norm = dataset_config.use_time_norm)
+        self.val_dataset = DynamicPairDataset(u_val, c_val, t_values, self.metadata, 
+                                              max_time_diff = max_time_diff, 
+                                              stepper_mode=dataset_config.stepper_mode,
+                                              stats=self.stats,
+                                              use_time_norm = dataset_config.use_time_norm)
+        self.test_dataset = DynamicPairDataset(u_test, c_test, t_values, self.metadata, 
+                                               max_time_diff = max_time_diff, 
+                                               stepper_mode=dataset_config.stepper_mode,
+                                               stats=self.stats,
+                                               use_time_norm = dataset_config.use_time_norm)
+        self.stats = self.train_dataset.stats
+    
         batch_size = dataset_config.batch_size
         shuffle = dataset_config.shuffle
         num_workers = dataset_config.num_workers
@@ -163,7 +170,7 @@ class SequentialTrainer(TrainerBase):
         self.config.datarow['r2p edges'] = self.rigraph.regional_to_physical.num_edges
 
     def init_model(self, model_config):
-        in_channels = self.u_mean.shape[0] + 2 # add lead time and time difference
+        in_channels = self.stats["u"]["mean"].shape[0] + 2 # add lead time and time difference
         
         if model_config.use_conditional_norm:
             in_channels = in_channels - 1 
@@ -172,7 +179,7 @@ class SequentialTrainer(TrainerBase):
         if hasattr(self, 'c_mean'):
             in_channels += self.c_mean.shape[0]
 
-        out_channels = self.u_mean.shape[0]
+        out_channels = self.stats["u"]["mean"].shape[0]
 
         self.model = init_model_from_rigraph(rigraph=self.rigraph, 
                                             input_size=in_channels, 
@@ -192,15 +199,6 @@ class SequentialTrainer(TrainerBase):
         else:
             pred = self.model(self.rigraph, batch_inputs)
 
-        if self.dataset_config.stepper_mode == "output":
-            pass
-        elif self.dataset_config.stepper_mode == "residual":
-            pred = batch_inputs[...,:-2] + pred
-        elif self.dataset_config.stepper_mode == "time_der":
-            pred = batch_inputs[...,:-2] + batch_inputs[...,0,-2:-1][...,None] * pred
-        else:
-            raise NotImplementedError(f"stepper mode{self.dataset_config.stepper_mode} didn't support!")
-
         return self.loss_fn(pred, batch_outputs)
     
     def validate(self, loader):
@@ -214,16 +212,6 @@ class SequentialTrainer(TrainerBase):
                     pred = self.model(self.rigraph, batch_inputs[...,:-1], batch_inputs[...,0,-2:-1])
                 else:
                     pred = self.model(self.rigraph, batch_inputs)
-                
-                if self.dataset_config.stepper_mode == "output":
-                    pass
-                elif self.dataset_config.stepper_mode == "residual":
-                    pred = batch_inputs[...,:-2] + pred
-                elif self.dataset_config.stepper_mode == "time_der":
-                    pred = batch_inputs[...,:-2] + batch_inputs[...,0,-2:-1][...,None] * pred
-                else:
-                    raise NotImplementedError(f"stepper mode{self.dataset_config.stepper_mode} didn't support!")
-                
                 loss = self.loss_fn(pred, batch_outputs)
                 total_loss += loss.item()
         return total_loss / len(loader)
@@ -246,13 +234,13 @@ class SequentialTrainer(TrainerBase):
         predictions = []
 
         t_values = self.test_dataset.t_values
-        start_times_mean = self.time_stats['start_times_mean']
-        start_times_std = self.time_stats['start_times_std']
-        time_diffs_mean = self.time_stats['time_diffs_mean']
-        time_diffs_std = self.time_stats['time_diffs_std']
+        start_times_mean = self.stats["start_time"]["mean"]
+        start_times_std = self.stats["start_time"]["std"]
+        time_diffs_mean = self.stats["time_diffs"]["mean"]
+        time_diffs_std = self.stats["time_diffs"]["std"]
 
-        u_in_dim = self.u_mean.shape[0]
-        c_in_dim = self.c_mean.shape[0] if hasattr(self, 'c_mean') else 0
+        u_in_dim = self.stats["u"]["mean"].shape[0]
+        c_in_dim = self.stats["c"]["mean"].shape[0] if hasattr(self, 'c_mean') else 0
         time_feature_dim = 2
 
         if c_in_dim > 0:
@@ -288,15 +276,6 @@ class SequentialTrainer(TrainerBase):
                     pred = self.model(self.rigraph, x_input[...,:-1], x_input[...,0,-2:-1])
                 else:
                     pred = self.model(self.rigraph, x_input)
-                
-                if self.dataset_config.stepper_mode == "output":
-                    pass
-                elif self.dataset_config.stepper_mode == "residual":
-                    pred = x_input[...,:-2] + pred
-                elif self.dataset_config.stepper_mode == "time_der":
-                    pred = x_input[...,:-2] + x_input[...,0,-2:-1][...,None] * pred
-                else:
-                    raise NotImplementedError(f"stepper mode{self.dataset_config.stepper_mode} didn't support!")
 
             # Store prediction
             predictions.append(pred)
@@ -364,8 +343,36 @@ class SequentialTrainer(TrainerBase):
                     # TODO: Figure out whether from CPU to GPU is the compuation bottleneck
                     x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
                     pred = self.autoregressive_predict(x_batch, time_indices) # Shape: [batch_size, num_timesteps - 1, num_nodes, num_channels]
-                    pred_de_norm = pred * self.u_std.to(self.device) + self.u_mean.to(self.device)
-                    y_batch_de_norm = y_batch * self.u_std.to(self.device) + self.u_mean.to(self.device)
+                    
+                    input_mean = torch.tensor(self.stats["u"]["mean"], dtype=self.dtype).to(self.device)
+                    input_std = torch.tensor(self.stats["u"]["std"], dtype=self.dtype).to(self.device)
+                    u_input_de_norm = x_batch[...,:-2] * input_std + input_mean # actual physical variables
+
+                    if self.dataset_config.stepper_mode == "output":
+                        u_mean = torch.tensor(self.stats["u"]["mean"], dtype=self.dtype).to(self.device)
+                        u_std = torch.tensor(self.stats["u"]["std"], dtype=self.dtype).to(self.device)
+                        pred_de_norm = pred * u_std + u_mean
+                        y_batch_de_norm = y_batch * u_std + u_mean
+                    
+                    elif self.dataset_config.stepper_mode == "residual":
+                        u_mean = torch.tensor(self.stats["res"]["mean"], dtype=self.dtype).to(self.device)
+                        u_std = torch.tensor(self.stats["res"]["std"], dtype=self.dtype).to(self.device)
+                        pred_de_norm = pred * u_std + u_mean
+                        y_batch_de_norm = y_batch * u_std + u_mean
+                        pred_de_norm = u_input_de_norm + pred_de_norm
+                        y_batch_de_norm = u_input_de_norm + y_batch_de_norm
+
+                    elif self.dataset_config.stepper_mode == "time_der":
+                        u_mean = torch.tensor(self.stats["der"]["mean"], dtype=self.dtype).to(self.device)
+                        u_std = torch.tensor(self.stats["der"]["std"], dtype=self.dtype).to(self.device)
+                        tdiff_mean = torch.tensor(self.stats["time_diffs"]["mean"], dtype=self.dtype).to(self.device)
+                        tdiff_std = torch.tensor(self.stats["time_diffs"]["std"], dtype=self.dtype).to(self.device)
+                        pred_de_norm = pred * u_std + u_mean
+                        y_batch_de_norm = y_batch * u_std + u_mean
+                        time_diff_de_norm = x_batch[...,-1] * tdiff_std + tdiff_mean
+                        pred_de_norm = u_input_de_norm + time_diff_de_norm[...,None] * pred_de_norm
+                        y_batch_de_norm = u_input_de_norm + time_diff_de_norm[...,None] * y_batch_de_norm
+
                     if self.dataset_config.metric == "final_step":
                         relative_errors = compute_batch_errors(
                             y_batch_de_norm[:,-1,:,:][:,None,:,:], 
