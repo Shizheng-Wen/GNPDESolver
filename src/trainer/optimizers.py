@@ -18,6 +18,7 @@ class OptimizerargsConfig:
     loss_scale: float = 1.0
     eval_every_eps: int = 2
     scheduler: str = "mix" 
+    early_save_metric: str = 'val'
 
     # for mix scheduler
     max_lr: float = 1e-2     
@@ -88,6 +89,10 @@ class AdamOptimizer:
         self.lr = config.lr  
         self.loss_scale = config.loss_scale
         self.eval_every_eps = config.eval_every_eps
+        self.early_save_metric = config.early_save_metric.lower()
+
+        if self.early_save_metric not in ['train', 'val']:
+            raise ValueError("`early_save_metric` must be either 'train' or 'val'.")
 
         if config.scheduler == 'step':
             self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=config.scheduler_step_size, gamma=config.scheduler_gamma)
@@ -158,8 +163,13 @@ class AdamOptimizer:
                 val_losses.append(val_loss)
                 val_epochs.append(epoch)
 
-                if val_loss < best_loss:
-                    best_loss = val_loss
+                if self.early_save_metric == 'val':
+                    current_loss = val_loss
+                else:
+                    current_loss = train_loss
+
+                if current_loss < best_loss:
+                    best_loss = current_loss
                     best_epoch = epoch
                     best_state = deepcopy(trainer.model.state_dict())
         
@@ -199,7 +209,10 @@ class AdamWOptimizer:
         self.lr = config.lr  
         self.loss_scale = config.loss_scale
         self.eval_every_eps = config.eval_every_eps
+        self.early_save_metric = config.early_save_metric.lower()
 
+        if self.early_save_metric not in ['train', 'val']:
+            raise ValueError("`early_save_metric` must be either 'train' or 'val'.")
         
         if config.scheduler == 'step':
             self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=config.scheduler_step_size, gamma=config.scheduler_gamma)
@@ -270,8 +283,13 @@ class AdamWOptimizer:
                 val_losses.append(val_loss)
                 val_epochs.append(epoch)
 
-                if val_loss < best_loss:
-                    best_loss = val_loss
+                if self.early_save_metric == 'val':
+                    current_loss = val_loss
+                else:
+                    current_loss = train_loss
+
+                if current_loss < best_loss:
+                    best_loss = current_loss
                     best_epoch = epoch
                     best_state = deepcopy(trainer.model.state_dict())
 
@@ -308,7 +326,12 @@ class FinetuningOptimizer:
         self.epoch = config.epoch
         self.loss_scale = config.loss_scale
         self.eval_every_eps = config.eval_every_eps
-        self.max_grad_norm = config.max_grad_norm  
+        self.max_grad_norm = config.max_grad_norm 
+        
+        self.early_save_metric = config.early_save_metric.lower()
+
+        if self.early_save_metric not in ['train', 'val']:
+            raise ValueError("`early_save_metric` must be either 'train' or 'val'.") 
 
         param_groups = []
 
@@ -385,7 +408,6 @@ class FinetuningOptimizer:
         else:
             self.scheduler = None
 
-
     def optimize(self, trainer: 'TrainerBase', description: str = "FinetuningOptimizer", color: str = "blue"):
         time_total = 0.0
         best_loss, best_epoch, best_state = np.inf, -1, None
@@ -424,8 +446,13 @@ class FinetuningOptimizer:
                 val_losses.append(val_loss)
                 val_epochs.append(epoch)
 
-                if val_loss < best_loss:
-                    best_loss = val_loss
+                if self.early_save_metric == 'val':
+                    current_loss = val_loss
+                else:
+                    current_loss = train_loss
+
+                if current_loss < best_loss:
+                    best_loss = current_loss
                     best_epoch = epoch
                     best_state = deepcopy(trainer.model.state_dict())
 
