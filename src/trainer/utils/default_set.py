@@ -75,7 +75,7 @@ class DatasetConfig:
     shuffle: bool = True
     metric: str = "final_step"
     predict_mode: str = "all"
-    stepper_mode: str = "output"
+    stepper_mode: str = "output"                                            # [output, residual, time_der]
 
 @dataclass
 class OptimizerConfig:

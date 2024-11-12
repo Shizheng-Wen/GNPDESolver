@@ -81,14 +81,14 @@ class SequentialTrainer(TrainerBase):
         test_indices = indices[-test_size:]
 
         # Split data into train, val, test
-        u_train = u_array[train_indices]
-        u_val = u_array[val_indices]
-        u_test = u_array[test_indices]
+        u_train = np.ascontiguousarray(u_array[train_indices])
+        u_val = np.ascontiguousarray(u_array[val_indices])
+        u_test = np.ascontiguousarray(u_array[test_indices])
 
         if c_array is not None:
-            c_train = c_array[train_indices]
-            c_val = c_array[val_indices]
-            c_test = c_array[test_indices]
+            c_train = np.ascontiguousarray(c_array[train_indices])
+            c_val = np.ascontiguousarray(c_array[val_indices])
+            c_test = np.ascontiguousarray(c_array[test_indices])
         else:
             c_train = c_val = c_test = None
 
@@ -97,7 +97,7 @@ class SequentialTrainer(TrainerBase):
         self.stats["u"] = {}
         self.stats["res"] = {}
         self.stats["der"] = {}
-
+        
         self.stats["u"]["mean"] = np.mean(u_train, axis=(0,1,2))  # Shape: [num_active_vars]
         self.stats["u"]["std"] = np.std(u_train, axis=(0,1,2)) + EPSILON
         if dataset_config.use_metadata_stats:
@@ -111,7 +111,7 @@ class SequentialTrainer(TrainerBase):
             # Store statistics
             self.stats["c"]["mean"] = c_mean
             self.stats["c"]["std"] = c_std
-
+        
         if self.metadata.domain_t is not None:
             t_start, t_end = self.metadata.domain_t
             t_values = np.linspace(t_start, t_end, u_array.shape[1]) # shape: [num_timesteps]
@@ -239,6 +239,9 @@ class SequentialTrainer(TrainerBase):
         time_diffs_mean = self.stats["time_diffs"]["mean"]
         time_diffs_std = self.stats["time_diffs"]["std"]
 
+        u_mean = torch.tensor(self.stats["u"]["mean"], dtype=self.dtype).to(self.device)
+        u_std = torch.tensor(self.stats["u"]["std"], dtype=self.dtype).to(self.device)
+
         u_in_dim = self.stats["u"]["mean"].shape[0]
         c_in_dim = self.stats["c"]["mean"].shape[0] if hasattr(self, 'c_mean') else 0
         time_feature_dim = 2
@@ -276,12 +279,37 @@ class SequentialTrainer(TrainerBase):
                     pred = self.model(self.rigraph, x_input[...,:-1], x_input[...,0,-2:-1])
                 else:
                     pred = self.model(self.rigraph, x_input)
+                
+                if self.dataset_config.stepper_mode == "output":
+                    pred_de_norm = pred * u_std + u_mean
+                    next_input = pred
+                
+                elif self.dataset_config.stepper_mode == "residual":
+                    res_mean = torch.tensor(self.stats["res"]["mean"], dtype=self.dtype).to(self.device)
+                    res_std = torch.tensor(self.stats["res"]["std"], dtype=self.dtype).to(self.device)
+                    pred_de_norm = pred * res_std + res_mean
+
+                    u_input_de_norm = current_u_in * u_std + u_mean
+
+                    
+                    pred_de_norm = u_input_de_norm + pred_de_norm
+                    next_input = (pred_de_norm - u_mean)/u_std
+                
+                elif self.dataset_config.stepper_mode == "time_der":
+                    der_mean = torch.tensor(self.stats["der"]["mean"], dtype=self.dtype).to(self.device)
+                    der_std = torch.tensor(self.stats["der"]["std"], dtype=self.dtype).to(self.device)
+                    pred_de_norm = pred * der_std + der_mean
+                    u_input_de_norm = current_u_in * u_std + u_mean
+                    # time difference
+                    time_diff_tensor = torch.tensor(time_diff, dtype=self.dtype).to(self.device)
+                    pred_de_norm = u_input_de_norm + time_diff_tensor * pred_de_norm
+                    next_input = (pred_de_norm - u_mean)/u_std
 
             # Store prediction
-            predictions.append(pred)
+            predictions.append(pred_de_norm)
 
             # Update current_u_in for next iteration
-            current_u_in = pred
+            current_u_in = next_input
         
         predictions = torch.stack(predictions, dim=1) # Shape: [batch_size, num_timesteps - 1, num_nodes, output_dim]
         
@@ -316,8 +344,9 @@ class SequentialTrainer(TrainerBase):
                 c_data = self.test_dataset.c_data,
                 t_values = self.test_dataset.t_values,
                 metadata = self.metadata,
-                time_indices = time_indices
-            )
+                time_indices = time_indices,
+                stats = self.stats
+            ) # x is normalized, y is not normalized
 
             # TEST = True
             # if TEST:
@@ -326,7 +355,8 @@ class SequentialTrainer(TrainerBase):
             #         c_data = self.train_dataset.c_data,
             #         t_values = self.train_dataset.t_values,
             #         metadata = self.metadata,
-            #         time_indices = time_indices
+            #         time_indices = time_indices,
+            #         stats = self.stats
             #         )
 
             test_loader = DataLoader(
@@ -341,37 +371,12 @@ class SequentialTrainer(TrainerBase):
             with torch.no_grad():
                 for i, (x_batch, y_batch) in enumerate(test_loader):
                     # TODO: Figure out whether from CPU to GPU is the compuation bottleneck
-                    x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
+                    # x_batch is normalized, y_batch is not normalized
+                    x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device) # Shape: [batch_size, num_nodes, num_channels] 
                     pred = self.autoregressive_predict(x_batch, time_indices) # Shape: [batch_size, num_timesteps - 1, num_nodes, num_channels]
                     
-                    input_mean = torch.tensor(self.stats["u"]["mean"], dtype=self.dtype).to(self.device)
-                    input_std = torch.tensor(self.stats["u"]["std"], dtype=self.dtype).to(self.device)
-                    u_input_de_norm = x_batch[...,:-2] * input_std + input_mean # actual physical variables
-
-                    if self.dataset_config.stepper_mode == "output":
-                        u_mean = torch.tensor(self.stats["u"]["mean"], dtype=self.dtype).to(self.device)
-                        u_std = torch.tensor(self.stats["u"]["std"], dtype=self.dtype).to(self.device)
-                        pred_de_norm = pred * u_std + u_mean
-                        y_batch_de_norm = y_batch * u_std + u_mean
-                    
-                    elif self.dataset_config.stepper_mode == "residual":
-                        u_mean = torch.tensor(self.stats["res"]["mean"], dtype=self.dtype).to(self.device)
-                        u_std = torch.tensor(self.stats["res"]["std"], dtype=self.dtype).to(self.device)
-                        pred_de_norm = pred * u_std + u_mean
-                        y_batch_de_norm = y_batch * u_std + u_mean
-                        pred_de_norm = u_input_de_norm + pred_de_norm
-                        y_batch_de_norm = u_input_de_norm + y_batch_de_norm
-
-                    elif self.dataset_config.stepper_mode == "time_der":
-                        u_mean = torch.tensor(self.stats["der"]["mean"], dtype=self.dtype).to(self.device)
-                        u_std = torch.tensor(self.stats["der"]["std"], dtype=self.dtype).to(self.device)
-                        tdiff_mean = torch.tensor(self.stats["time_diffs"]["mean"], dtype=self.dtype).to(self.device)
-                        tdiff_std = torch.tensor(self.stats["time_diffs"]["std"], dtype=self.dtype).to(self.device)
-                        pred_de_norm = pred * u_std + u_mean
-                        y_batch_de_norm = y_batch * u_std + u_mean
-                        time_diff_de_norm = x_batch[...,-1] * tdiff_std + tdiff_mean
-                        pred_de_norm = u_input_de_norm + time_diff_de_norm[...,None] * pred_de_norm
-                        y_batch_de_norm = u_input_de_norm + time_diff_de_norm[...,None] * y_batch_de_norm
+                    y_batch_de_norm = y_batch
+                    pred_de_norm = pred
 
                     if self.dataset_config.metric == "final_step":
                         relative_errors = compute_batch_errors(

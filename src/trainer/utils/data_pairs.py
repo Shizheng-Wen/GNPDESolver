@@ -126,7 +126,7 @@ class DynamicPairDataset(Dataset):
         return input_features, target
 
 class TestDataset(Dataset):
-    def __init__(self, u_data, c_data, t_values, metadata, time_indices):
+    def __init__(self, u_data, c_data, t_values, metadata, time_indices, stats):
         """
         Custom dataset for testing, providing initial input and ground truth sequences.
         
@@ -136,6 +136,7 @@ class TestDataset(Dataset):
             t_values (numpy.ndarray): Actual time values corresponding to timesteps
             metadata (Metadata): Metadata object containing domain information
             time_indices (list or np.ndarray): Time indices to consider (e.g., [0, 2, 4, ..., 14])
+            stats (dict): 
         """
         self.u_data = u_data
         self.c_data = c_data
@@ -146,7 +147,7 @@ class TestDataset(Dataset):
         self.num_nodes = u_data.shape[2]
         self.num_vars = u_data.shape[3]
         self.dtype = np.float32  # or np.float64, depending on your data type
-        
+        self.stats = stats
         # Precompute normalized u_data if necessary (using self.u_mean and self.u_std)
         # Assuming self.u_mean and self.u_std are already computed and available
 
@@ -156,16 +157,18 @@ class TestDataset(Dataset):
     def __getitem__(self, idx):
         # Get initial input at time t=0
         u_in = self.u_data[idx, self.time_indices[0]]  # Shape: [num_nodes, num_vars]
+        u_in_norm = (u_in - self.stats["u"]["mean"]) / self.stats["u"]["std"]
         # Get ground truth outputs at future time steps
         y_sequence = self.u_data[idx, self.time_indices[1:]]  # Shape: [num_timesteps - 1, num_nodes, num_vars]
         
         # If c_data is available
         if self.c_data is not None:
             c_in = self.c_data[idx, self.time_indices[0]]  # Shape: [num_nodes, num_c_vars]
+            c_in_norm = (c_in - self.stats["c"]["mean"]) / self.stats["c"]["std"]
             # Combine u_in and c_in
-            input_features = np.concatenate([u_in, c_in], axis=-1)
+            input_features = np.concatenate([u_in_norm, c_in_norm], axis=-1)
         else:
-            input_features = u_in  # Shape: [num_nodes, num_vars]
+            input_features = u_in_norm  # Shape: [num_nodes, num_vars]
         
         # Note: Time features will be added in the `autoregressive_predict` function
         return input_features.astype(self.dtype), y_sequence.astype(self.dtype)
