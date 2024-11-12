@@ -63,6 +63,7 @@ class DatasetConfig:
     metaname: str = "rigno-unstructured/CE-Gauss"
     base_path: str = "/cluster/work/math/camlab-data/rigno-unstructured/"
     use_metadata_stats: bool = False
+    sample_rate: float = 0.1
     use_sparse: bool = False                                                # Use full resolution for Poseidon Dataset
     train_size: int = 1024
     val_size: int = 128

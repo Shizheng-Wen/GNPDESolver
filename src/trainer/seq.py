@@ -11,6 +11,7 @@ import matplotlib.tri as tri
 from .base import TrainerBase
 from .utils import (manual_seed, DynamicPairDataset, TestDataset, 
                     compute_batch_errors, compute_final_metric)
+from .utils.io_norm import compute_stats
 from ..utils import shallow_asdict
 
 from src.data.dataset import Metadata, DATASET_METADATA
@@ -92,39 +93,17 @@ class SequentialTrainer(TrainerBase):
         else:
             c_train = c_val = c_test = None
 
-        # Compute dataset statistics from training data
-        self.stats = {}
-        self.stats["u"] = {}
-        self.stats["res"] = {}
-        self.stats["der"] = {}
-        
-        self.stats["u"]["mean"] = np.mean(u_train, axis=(0,1,2))  # Shape: [num_active_vars]
-        self.stats["u"]["std"] = np.std(u_train, axis=(0,1,2)) + EPSILON
-        if dataset_config.use_metadata_stats:
-            self.stats["u"]["mean"] = self.metadata.global_mean
-            self.stats["u"]["std"] = self.metadata.global_std
-        if c_array is not None:
-            self.stats["c"] = {}
-            c_train_flat = c_train.reshape(-1, c_train.shape[-1])
-            c_mean = np.mean(c_train_flat, axis=0)
-            c_std = np.std(c_train_flat, axis=0) + EPSILON  # Avoid division by zero
-            # Store statistics
-            self.stats["c"]["mean"] = c_mean
-            self.stats["c"]["std"] = c_std
-        
         if self.metadata.domain_t is not None:
             t_start, t_end = self.metadata.domain_t
             t_values = np.linspace(t_start, t_end, u_array.shape[1]) # shape: [num_timesteps]
         else:
             raise ValueError("metadata.domain_t is None. Cannot compute actual time values.")
 
-        self.stats["res"]["mean"] = np.mean(u_train[:,1:] - u_train[:,:-1], axis=(0,1,2))  # Shape: [num_active_vars]
-        self.stats["res"]["std"] = np.std(u_train[:,1:] - u_train[:,:-1], axis=(0,1,2)) + EPSILON
-        t_difference = t_values[1:] - t_values[:-1]
-        self.stats["der"]["mean"] = np.mean((u_train[:,1:] - u_train[:,:-1]) / t_difference[None,:,None,None], axis=(0,1,2))
-        self.stats["der"]["std"] = np.std((u_train[:,1:] - u_train[:,:-1]) / t_difference[None,:,None,None], axis=(0,1,2)) + EPSILON
-
         max_time_diff = getattr(dataset_config, "max_time_diff", None)
+        self.stats = compute_stats(u_train, c_train, t_values, self.metadata,max_time_diff,
+                                  sample_rate=dataset_config.sample_rate,
+                                  use_metadata_stats=dataset_config.use_metadata_stats,
+                                  use_time_norm=dataset_config.use_time_norm)
         self.train_dataset = DynamicPairDataset(u_train, c_train, t_values, self.metadata, 
                                                 max_time_diff = max_time_diff, 
                                                 stepper_mode=dataset_config.stepper_mode,
@@ -140,8 +119,6 @@ class SequentialTrainer(TrainerBase):
                                                stepper_mode=dataset_config.stepper_mode,
                                                stats=self.stats,
                                                use_time_norm = dataset_config.use_time_norm)
-        self.stats = self.train_dataset.stats
-    
         batch_size = dataset_config.batch_size
         shuffle = dataset_config.shuffle
         num_workers = dataset_config.num_workers

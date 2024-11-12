@@ -49,23 +49,6 @@ class DynamicPairDataset(Dataset):
         self.total_pairs = self.num_samples * self.num_time_pairs # The total size of the training data pairs.
 
         self.start_times = self.t_values[self.t_in_indices] # Shape: [num_time_pairs]
-
-        self.start_times_mean = np.mean(self.start_times)
-        self.start_times_std = np.std(self.start_times) + 1e-10
-        self.time_diffs_mean = np.mean(self.time_diffs)
-        self.time_diffs_std = np.std(self.time_diffs) + 1e-10
-        if not use_time_norm:
-            self.start_times_mean = 0.0
-            self.start_times_std = 1.0
-            self.time_diffs_mean = 0.0
-            self.time_diffs_std = 1.0
-        
-        self.stats["start_time"] = {}
-        self.stats["time_diffs"] = {}
-        self.stats["start_time"]["mean"] = self.start_times_mean
-        self.stats["start_time"]["std"] = self.start_times_std
-        self.stats["time_diffs"]["mean"] = self.time_diffs_mean
-        self.stats["time_diffs"]["std"] = self.time_diffs_std
         
         # precompute the normalized time features for all time pairs
         self.start_times_norm = (self.start_times - self.stats["start_time"]["mean"]) / self.stats["start_time"]["std"]
