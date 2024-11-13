@@ -32,7 +32,7 @@ class LANO(Physical2Regional2Physical):
         self.patch_size = attn_config.patch_size
         self.H = regional_points[0]
         self.W = regional_points[1]
-
+        
         # Initialize encoder, processor, and decoder
         self.encoder = self.init_encoder(input_size, rigraph, gno_config)
         self.processor = self.init_processor(self.node_latent_size, attn_config)
@@ -44,7 +44,7 @@ class LANO(Physical2Regional2Physical):
             out_channels = self.node_latent_size,
             gno_config = gno_config
         )
-    
+        
     def init_processor(self, node_latent_size, config):
         # Initialize the Vision Transformer processor
         self.patch_linear = nn.Linear(self.patch_size * self.patch_size * self.node_latent_size,

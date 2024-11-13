@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .utils.gno_utils import Activation, segment_csr, NeighborSearch
+from .utils.geoembed import GeometricEmbedding
 from .mlp import LinearChannelMLP, ChannelMLP
 from ...graph import RegionInteractionGraph
 
@@ -24,6 +25,7 @@ class GNOConfig:
     node_embedding: bool = False
     use_attn: Optional[bool] = None 
     attention_type: str = 'cosine'
+    use_geoembed: bool = False
 
 
 
@@ -334,6 +336,19 @@ class GNOEncoder(nn.Module):
             out_channels = out_channels,
             n_layers= 1
             )
+        
+        if gno_config.use_geoembed:
+            self.geoembed = GeometricEmbedding(
+                input_dim= gno_config.gno_coord_dim,
+                output_dim=out_channels,
+                method='statistical'
+            )
+            self.recovery = ChannelMLP(
+                in_channels = 2 * out_channels,
+                out_channels = out_channels,
+                n_layers= 1
+            )
+
 
     def forward(self, graph: RegionInteractionGraph, pndata: torch.Tensor) -> torch.Tensor:
         batch_size = pndata.shape[0]
@@ -346,6 +361,11 @@ class GNOEncoder(nn.Module):
                 self.gno_radius
             )
             self.graph_cache = True
+            if hasattr(self, 'geoembed'):
+                self.geoembedding = self.geoembed(self.input_geom, 
+                                             self.latent_queries, 
+                                             self.spatial_nbrs)[None, :, :]
+                self.geoembedding = self.geoembedding.repeat([batch_size, 1, 1])
         pndata = pndata.permute(0,2,1)
         pndata = self.lifting(pndata).permute(0, 2, 1)  
 
@@ -355,6 +375,11 @@ class GNOEncoder(nn.Module):
             f_y=pndata,
             neighbors=self.spatial_nbrs
         ) # [batch_size, num_nodes, channels]
+
+        if hasattr(self, 'geoembed'):
+            encoded = torch.cat([encoded, self.geoembedding], dim=-1)
+            encoded = encoded.permute(0, 2, 1)
+            encoded = self.recovery(encoded).permute(0, 2, 1)
         return encoded
 
 
@@ -394,6 +419,18 @@ class GNODecoder(nn.Module):
             n_dim=1,
         )
 
+        if gno_config.use_geoembed:
+            self.geoembed = GeometricEmbedding(
+                input_dim= gno_config.gno_coord_dim,
+                output_dim=in_channels,
+                method='statistical'
+            )
+            self.recovery = ChannelMLP(
+                in_channels = 2 * in_channels,
+                out_channels = in_channels,
+                n_layers= 1
+            )
+
     def forward(self, graph: RegionInteractionGraph, rndata: torch.Tensor) -> torch.Tensor:
         batch_size = rndata.shape[0]
 
@@ -407,6 +444,12 @@ class GNODecoder(nn.Module):
                 self.latent_queries,
                 self.gno_radius
             )
+            self.graph_cache = True
+            if hasattr(self, 'geoembed'):
+                self.geoembedding = self.geoembed(self.input_geom, 
+                                             self.latent_queries, 
+                                             self.spatial_nbrs)[None, :, :]
+                self.geoembedding = self.geoembedding.repeat([batch_size, 1, 1])
 
         decoded = self.gno(
             y=graph.regional_to_physical.get_ndata()[0],
@@ -414,6 +457,11 @@ class GNODecoder(nn.Module):
             f_y=rndata,
             neighbors=self.spatial_nbrs
         )
+
+        if hasattr(self, 'geoembed'):
+            decoded = torch.cat([decoded, self.geoembedding], dim=-1)
+            decoded = decoded.permute(0, 2, 1)
+            decoded = self.recovery(decoded).permute(0, 2, 1)
 
         decoded = decoded.permute(0,2,1)
         decoded = self.projection(decoded).permute(0, 2, 1)  
