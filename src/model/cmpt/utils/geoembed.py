@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch_scatter import scatter_mean, scatter_sum
+from torch_scatter import scatter_mean, scatter_sum, scatter_max
 
 class GeometricEmbedding(nn.Module):
     def __init__(self, input_dim, output_dim, method='statistical', **kwargs):
@@ -17,13 +17,31 @@ class GeometricEmbedding(nn.Module):
                 nn.Linear(64, output_dim),
                 nn.ReLU()
             )
+            self.register_buffer("geo_features_normalized_cache", None)
+        elif self.method == 'pointnet':
+            self.pointnet_mlp = nn.Sequential(
+                nn.Linear(input_dim, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+            )
+            self.fc = nn.Sequential(
+                nn.Linear(64, output_dim),
+                nn.ReLU()
+            )
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
     def forward(self, input_geom, latent_queries, spatial_nbrs):
         if self.method == 'statistical':
-            geo_features_normalized = self._compute_statistical_features(input_geom, latent_queries, spatial_nbrs)
+            if self.geo_features_normalized_cache is None:
+                geo_features_normalized = self._compute_statistical_features(input_geom, latent_queries, spatial_nbrs)
+                self.geo_features_normalized_cache = geo_features_normalized
+            else:
+                geo_features_normalized = self.geo_features_normalized_cache
             return self.mlp(geo_features_normalized)
+        elif self.method == 'pointnet':
+            return self._compute_pointnet_features(input_geom, latent_queries, spatial_nbrs)
         else:
             raise ValueError(f"Unknown method: {self.method}")
     
@@ -130,3 +148,76 @@ class GeometricEmbedding(nn.Module):
 
             return geo_features_normalized
 
+    def _compute_pointnet_features(self, input_geom, latent_queries, spatial_nbrs):
+        """
+        Use pointnet to compute geometric features for each query point.
+
+        Parameters:
+            input_geom (torch.FloatTensor): The input geometry, shape: [num_nodes, num_dims]
+            latent_queries (torch.FloatTensor): The latent queries, shape: [num_nodes, num_dims]
+            spatial_nbrs (dict): {"neighbors_index": torch.LongTensor, "neighbors_row_splits": torch.LongTensor}
+                    neighbors_index: torch.Tensor with dtype=torch.int64
+                        Index of each neighbor in data for every point
+                        in queries. Neighbors are ordered in the same orderings
+                        as the points in queries. Open3d and torch_cluster
+                        implementations can differ by a permutation of the
+                        neighbors for every point.
+                    neighbors_row_splits: torch.Tensor of shape [m+1] with dtype=torch.int64
+                        The value at index j is the sum of the number of
+                        neighbors up to query point j-1. First element is 0
+                        and last element is the total number of neighbors.
+        Returns:
+            geo_features (torch.FloatTensor): The geometric features, shape: [num_query_nodes, num_dims]
+        """
+
+        num_queries = latent_queries.shape[0]
+        device = latent_queries.device
+
+        neighbors_index = spatial_nbrs["neighbors_index"]  # [num_total_neighbors]
+        neighbors_row_splits = spatial_nbrs['neighbors_row_splits']  # [num_queries + 1]
+
+        num_neighbors_per_query = neighbors_row_splits[1:] - neighbors_row_splits[:-1]  # [num_queries]
+        has_neighbors = num_neighbors_per_query > 0  # [num_queries]
+
+        # 对于没有邻居的查询点，我们可以创建一个零向量或者一个可学习的参数
+        geo_features = torch.zeros(num_queries, self.output_dim, device=device)
+
+        # 仅对有邻居的查询点进行处理
+        if has_neighbors.any():
+            # 获取有邻居的查询点的索引
+            valid_query_indices = torch.nonzero(has_neighbors).squeeze(1)
+            # 获取有邻居的查询点对应的邻居起始和结束索引
+            valid_starts = neighbors_row_splits[:-1][has_neighbors]
+            valid_ends = neighbors_row_splits[1:][has_neighbors]
+
+            # 为每个邻居点分配其所属的查询点索引
+            query_indices_per_neighbor = torch.repeat_interleave(valid_query_indices, num_neighbors_per_query[has_neighbors])
+
+            # 获取邻居点坐标
+            nbr_coords = input_geom[neighbors_index]  # [num_total_neighbors, num_dims]
+            # 获取对应的查询点坐标
+            query_coords_per_neighbor = latent_queries[query_indices_per_neighbor]  # [num_total_valid_neighbors, num_dims]
+
+            # 将邻居点相对于查询点进行中心化
+            nbr_coords_centered = nbr_coords - query_coords_per_neighbor  # [num_total_valid_neighbors, num_dims]
+
+            # 通过 MLP 逐点处理邻居点
+            nbr_features = self.pointnet_mlp(nbr_coords_centered)  # [num_total_valid_neighbors, feature_dim]
+
+            # 使用 scatter_max 在每个查询点的邻域内进行最大池化
+            # 首先，我们需要为每个邻居点提供其对应的查询点索引
+            # query_indices_per_neighbor 已经是我们需要的索引
+
+            # 使用 scatter_max 进行最大池化
+            max_features, _ = scatter_max(nbr_features, query_indices_per_neighbor, dim=0, dim_size=num_queries)
+
+            # 对于有邻居的查询点，获取其对应的最大特征
+            pointnet_features = max_features[valid_query_indices]  # [num_valid_queries, feature_dim]
+
+            # 通过全连接层
+            pointnet_features = self.fc(pointnet_features)  # [num_valid_queries, output_dim]
+
+            # 将特征赋值给对应的查询点
+            geo_features[valid_query_indices] = pointnet_features
+
+        return geo_features
