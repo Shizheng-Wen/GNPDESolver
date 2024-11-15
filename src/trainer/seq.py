@@ -58,7 +58,7 @@ class SequentialTrainer(TrainerBase):
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
             self.x_train = self.x_train[:,:,:9216,:]
-        
+
         self.x_train = torch.tensor(self.x_train, dtype=self.dtype).to(self.device)
         # Handle active variables
         active_vars = self.metadata.active_variables
@@ -152,9 +152,8 @@ class SequentialTrainer(TrainerBase):
         if model_config.use_conditional_norm:
             in_channels = in_channels - 1 
 
-
-        if hasattr(self, 'c_mean'):
-            in_channels += self.c_mean.shape[0]
+        if "c" in self.stats:
+            in_channels += self.stats["c"]["mean"].shape[0]
 
         out_channels = self.stats["u"]["mean"].shape[0]
 
@@ -220,9 +219,8 @@ class SequentialTrainer(TrainerBase):
         u_std = torch.tensor(self.stats["u"]["std"], dtype=self.dtype).to(self.device)
 
         u_in_dim = self.stats["u"]["mean"].shape[0]
-        c_in_dim = self.stats["c"]["mean"].shape[0] if hasattr(self, 'c_mean') else 0
+        c_in_dim = self.stats["c"]["mean"].shape[0] if "c" in self.stats else 0
         time_feature_dim = 2
-
         if c_in_dim > 0:
             c_in = x_batch[..., u_in_dim:u_in_dim+c_in_dim] # Shape: [batch_size, num_nodes, c_in_dim]
         else:
@@ -249,7 +247,7 @@ class SequentialTrainer(TrainerBase):
             input_features.append(start_time_expanded)
             input_features.append(time_diff_expanded)
             x_input = torch.cat(input_features, dim=-1)  # Shape: [batch_size, num_nodes, input_dim]
-
+            
             # Forward pass
             with torch.no_grad():
                 if self.model_config.use_conditional_norm:
