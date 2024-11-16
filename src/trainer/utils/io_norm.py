@@ -2,7 +2,7 @@ import numpy as np
 
 EPSILON = 1e-10
 
-def compute_stats(u_data,c_data,t_values, metadata, max_time_diff = 14, sample_rate = 0.1, use_metadata_stats = False, use_time_norm = False):
+def compute_stats(u_data, c_data, t_values, metadata, max_time_diff = 14, sample_rate = 0.1, use_metadata_stats = False, use_time_norm = False):
     """
     Compute statistics for normalization
 
@@ -47,8 +47,8 @@ def compute_stats(u_data,c_data,t_values, metadata, max_time_diff = 14, sample_r
     stats["u"]["mean"] = np.mean(u_data, axis=(0,1,2))  # Shape: [num_active_vars]
     stats["u"]["std"] = np.std(u_data, axis=(0,1,2)) + EPSILON
     if use_metadata_stats:
-        stats["u"]["mean"] = metadata.global_mean
-        stats["u"]["std"] = metadata.global_std
+        stats["u"]["mean"] = np.array(metadata.global_mean)
+        stats["u"]["std"] = np.array(metadata.global_std)
     if c_data is not None:
         stats["c"] = {}
         stats["c"]["mean"] = np.mean(c_data, axis=(0,1,2))
