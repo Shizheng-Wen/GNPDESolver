@@ -155,3 +155,29 @@ class TestDataset(Dataset):
         
         # Note: Time features will be added in the `autoregressive_predict` function
         return input_features.astype(self.dtype), y_sequence.astype(self.dtype)
+    
+#######################################
+# Utils for Foundation Model
+#######################################
+class MixedDataset(Dataset):
+    def __init__(self, datasets):
+        """
+        Custom dataset to handle multiple datasets. 
+        Args:
+            datasets (dict): Dictionary containing dataset names and corresponding datasets
+        """
+        self.datasets = datasets
+        self.total_length = sum(len(d) for d in datasets.values())
+        self.dataset_indices = []
+        for dataset_name, dataset in datasets.items():
+            for idx in range(len(dataset)):
+                self.dataset_indices.append((dataset_name, idx))
+
+    def __len__(self):
+        return self.total_length
+
+    def __getitem__(self, idx):
+        datasetname, sample_idx = self.dataset_indices[idx]
+        dataset = self.datasets[datasetname]
+        input_features, target = dataset[sample_idx]
+        return datasetname, input_features, target

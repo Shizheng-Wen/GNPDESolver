@@ -12,6 +12,7 @@ from .base import TrainerBase
 from .utils import (manual_seed, DynamicPairDataset, TestDataset, 
                     compute_batch_errors, compute_final_metric)
 from .utils.io_norm import compute_stats
+from .utils.data_pairs import MixedDataset
 from ..utils import shallow_asdict
 
 from src.data.dataset import Metadata, DATASET_METADATA
@@ -516,3 +517,158 @@ class SequentialTrainer(TrainerBase):
                 times.append(end_time - start_time)
             avg_time = sum(times) / len(times)
             print(f"Average inference time over 10 runs (batch size = 1): {avg_time:.6f} seconds")
+
+class FoundationModelTrainer(TrainerBase):
+    def __init__(self, args):
+        super().__init__(args)
+
+    def init_dataset(self, dataset_config):
+        base_path  = dataset_config.base_path
+        dataset_names = dataset_config.names
+        metadata_names = dataset_config.metadata_names
+
+        self.datasets = {}
+        self.dataloaders = {}
+        self.stats = {}
+
+        for dataset_name, metadata in zip(dataset_names, metadata_names):
+            dataset_path = os.path.join(base_path, f"{dataset_name}.nc")
+            with xr.open_dataset(dataset_path) as ds:
+                u_array = ds[self.metadata.group_u].values
+                if self.metadata.group_c is not None:
+                    c_array = ds[self.metadata.group_c].values
+                else:
+                    c_array = None
+                if self.metadata.group_x is not None:
+                    x_array = ds[self.metadata.group_x].values
+                    x_train = x_array
+                else:
+                    domain_x = self.metadata.domain_x
+                    nx, ny = u_array.shape[2], u_array.shape[3]
+                    x_lin = np.linspace(domain_x[0][0], domain_x[1][0], nx)
+                    y_lin = np.linspace(domain_x[0][1], domain_x[1][1], ny)
+                    xv, yv = np.meshgrid(x_lin, y_lin, indexing='ij')
+                    x_grid = np.stack([xv, yv], axis=-1)
+                    x_grid = x_grid.reshape(-1, 2)
+                    x_grid = x_grid[None, None, ...]
+                    x_train = x_grid
+            
+            active_vars = metadata.active_variables
+            u_array = u_array[..., active_vars]
+
+            total_samples = u_array.shape[0]
+            train_size = dataset_config.train_size
+            val_size = dataset_config.val_size
+            test_size = dataset_config.test_size
+            assert train_size + val_size + test_size <= total_samples, (
+                "Sum of train, val, and test sizes exceeds total samples"
+            )
+
+            if dataset_config.rand_dataset:
+                indices = np.random.permutation(len(u_array))
+            else:
+                indices = np.arange(len(u_array))
+            
+            train_indices = indices[:train_size]
+            val_indices = indices[train_size:train_size+val_size]
+            test_indices = indices[-test_size:]
+
+            u_train = np.ascontiguousarray(u_array[train_indices])
+            u_val = np.ascontiguousarray(u_array[val_indices])
+            u_test = np.ascontiguousarray(u_array[test_indices])
+
+            if c_array is not None:
+                c_train = np.ascontiguousarray(c_array[train_indices])
+                c_val = np.ascontiguousarray(c_array[val_indices])
+                c_test = np.ascontiguousarray(c_array[test_indices])
+            else:
+                c_train = c_val = c_test = None
+            
+            if self.metadata.domain_t is not None:
+                t_start, t_end = metadata.domain_t
+                t_values = np.linspace(t_start, t_end, u_array.shape[1])
+
+            else:
+                raise ValueError("metadata.domain_t is None. Cannot compute actual time values.")
+
+            max_time_diff = getattr(dataset_config, "max_time_diff", None)
+            stats = compute_stats(u_train, c_train, t_values, metadata, max_time_diff,
+                                  sample_rate=dataset_config.sample_rate,
+                                  use_metadata_stats=dataset_config.use_metadata_stats,
+                                  use_time_norm=dataset_config.use_time_norm)
+            
+            train_dataset = DynamicPairDataset(u_train, c_train, t_values, metadata,
+                                               max_time_diff=max_time_diff,
+                                               stepper_mode=dataset_config.stepper_mode,
+                                               stats=stats,
+                                               use_time_norm=dataset_config.use_time_norm,
+                                               dataset_name=dataset_name)
+            val_dataset = DynamicPairDataset(u_val, c_val, t_values, metadata,
+                                             max_time_diff=max_time_diff,
+                                             stepper_mode=dataset_config.stepper_mode,
+                                             stats=stats,
+                                             use_time_norm=dataset_config.use_time_norm,
+                                             dataset_name=dataset_name)
+            test_dataset = DynamicPairDataset(u_test, c_test, t_values, metadata,
+                                              max_time_diff=max_time_diff,
+                                              stepper_mode=dataset_config.stepper_mode,
+                                              stats=stats,
+                                              use_time_norm=dataset_config.use_time_norm,
+                                              dataset_name=dataset_name)
+            
+            batch_size = dataset_config.batch_size
+            shuffle = dataset_config.shuffle
+            num_workers = dataset_config.num_workers
+
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=shuffle,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn
+            )
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn
+            )
+            test_loader = DataLoader(
+                test_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn
+            )
+
+            self.datasets[dataset_name] = {
+                "train": train_dataset,
+                "val": val_dataset,
+                "test": test_dataset
+            }
+            self.dataloaders[dataset_name] = {
+                "train": train_loader,
+                "val": val_loader,
+                "test": test_loader
+            }
+            self.stats[dataset_name] = stats
+
+        self.mixed_dataset = MixedDataset({name: self.datasets[name]["train"] for name in dataset_names})
+
+        self.train_loader = DataLoader(
+            self.mixed_dataset,
+            batch_size=dataset_config.batch_size,
+            shuffle=True,
+            num_workers=dataset_config.num_workers,
+            collate_fn=self.collate_fn
+        )
+
+    def collate_fn(self, batch):
+        dataset_name, input_list, output_list = zip(*batch)
+        inputs = np.stack(input_list)
+        outputs = np.stack(output_list)
+        inputs = torch.tensor(inputs, dtype=self.dtype)
+        outputs = torch.tensor(outputs, dtype=self.dtype)
+
+        return dataset_name, inputs, outputs
