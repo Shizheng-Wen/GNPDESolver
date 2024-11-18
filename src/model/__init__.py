@@ -40,7 +40,7 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
     num_nodes = rigraph.regional_to_regional.num_nodes
     sqrt_num_nodes = int(math.sqrt(num_nodes))
     regional_points = (sqrt_num_nodes, sqrt_num_nodes)
-
+    
     if model.lower() == "rigno":
         return Physical2Regional2Physical(
             input_size   = input_size, 

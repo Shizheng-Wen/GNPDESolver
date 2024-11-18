@@ -52,7 +52,7 @@ def compute_stats(u_data, c_data, t_values, metadata, max_time_diff = 14, sample
     if c_data is not None:
         stats["c"] = {}
         stats["c"]["mean"] = np.mean(c_data, axis=(0,1,2))
-        stats["c"]["std"] = np.std(c_data, axis=(0,1,2))
+        stats["c"]["std"] = np.std(c_data, axis=(0,1,2)) + EPSILON
     
     stats["start_time"]["mean"] = np.mean(start_times)
     stats["start_time"]["std"] = np.std(start_times) + EPSILON

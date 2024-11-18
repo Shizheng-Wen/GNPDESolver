@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, List
 
 # model default config
 from ...model.cmpt.attn import TransformerConfig
@@ -77,6 +77,9 @@ class DatasetConfig:
     metric: str = "final_step"
     predict_mode: str = "all"
     stepper_mode: str = "output"                                            # [output, residual, time_der]
+    # Foundation model
+    names: List[str] = field(default_factory=lambda: ["Wave-Layer"])
+    metanames: List[str] = field(default_factory=lambda: ["rigno-unstructured/Wave-Layer"])
 
 @dataclass
 class OptimizerConfig:

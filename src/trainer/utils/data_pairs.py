@@ -2,9 +2,11 @@ import numpy as np
 from ...data.dataset import Metadata
 from torch.utils.data import Dataset
 import torch
+import random
 
 class DynamicPairDataset(Dataset):
-    def __init__(self, u_data, c_data, t_values, metadata, max_time_diff=14, stepper_mode="output", stats=None, use_time_norm=True):
+    def __init__(self, u_data, c_data, t_values, metadata, max_time_diff=14, 
+                 stepper_mode="output", stats=None, use_time_norm=True, dataset_name = None):
         """
         Custom Dataset that generates specific time pairs for training.
 
@@ -18,6 +20,7 @@ class DynamicPairDataset(Dataset):
             stats (dict): Dictionary to store statistics for all variables
             use_time_norm (bool): Normalize time features or not
         """
+        self.dataset_name = dataset_name
         self.u_data = u_data
         self.c_data = c_data
         self.t_values = t_values  # Shape: [num_timesteps]
@@ -181,3 +184,30 @@ class MixedDataset(Dataset):
         dataset = self.datasets[datasetname]
         input_features, target = dataset[sample_idx]
         return datasetname, input_features, target
+
+class CombinedDataLoader:
+    def __init__(self, loaders):
+        self.loaders = loaders
+
+    def __iter__(self):
+        self.loaders_iters = [iter(loader) for loader in self.loaders]
+        self.loader_indices = list(range(len(self.loaders_iters)))
+        return self
+
+    def __next__(self):
+        if not self.loader_indices:
+            raise StopIteration
+        while self.loader_indices:
+            idx = random.choice(self.loader_indices)
+            try:
+                batch = next(self.loaders_iters[idx])
+                return batch
+            except StopIteration:
+                self.loader_indices.remove(idx)
+                if not self.loader_indices:
+                    raise StopIteration
+                continue
+        raise StopIteration
+
+    def __len__(self):
+        return sum(len(loader) for loader in self.loaders)

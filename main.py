@@ -12,7 +12,7 @@ from multiprocessing import Pool,Process
 import subprocess
 import platform
 
-from src.trainer.seq import SequentialTrainer
+from src.trainer.seq import SequentialTrainer, FoundationModelTrainer
 from src.trainer.stat import StaticTrainer,StaticTrainer_unstructured, StaticTrainer_test, StaticTrainer_unstructured
 
 class FileParser:
@@ -95,6 +95,7 @@ def run_arg(arg):
         "static": StaticTrainer,
         "static_unstruc": StaticTrainer_unstructured,
         "static_test": StaticTrainer_test,
+        "foundation": FoundationModelTrainer
     }[arg.setup["trainer_name"]]
     t = Trainer(arg)
     if arg.setup["train"]:

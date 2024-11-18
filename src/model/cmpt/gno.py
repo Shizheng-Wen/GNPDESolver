@@ -360,7 +360,7 @@ class GNOEncoder(nn.Module):
                 self.latent_queries,
                 self.gno_radius
             )
-            self.graph_cache = True
+            self.graph_cache = None
         pndata = pndata.permute(0,2,1)
         pndata = self.lifting(pndata).permute(0, 2, 1)  
 
@@ -370,7 +370,7 @@ class GNOEncoder(nn.Module):
             f_y=pndata,
             neighbors=self.spatial_nbrs
         ) # [batch_size, num_nodes, channels]
-
+        
         if hasattr(self, 'geoembed'):
             geoembedding = self.geoembed(
                 self.input_geom,
@@ -446,7 +446,7 @@ class GNODecoder(nn.Module):
                 self.latent_queries,
                 self.gno_radius
             )
-            self.graph_cache = True
+            self.graph_cache = None
 
         decoded = self.gno(
             y=graph.regional_to_physical.get_ndata()[0],
