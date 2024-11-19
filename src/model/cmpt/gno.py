@@ -18,6 +18,8 @@ class GNOConfig:
     out_gno_channel_mlp_hidden_layers: list = field(default_factory=lambda: [64, 64])
     lifting_channels: int = 16
     gno_radius: float = 0.033
+    scales: list = field(default_factory=lambda: [1.0])
+    use_graph_cache: bool = True
     gno_use_open3d: bool = False
     in_gno_transform_type: str = 'linear'
     out_gno_transform_type: str = 'linear'
@@ -306,7 +308,7 @@ class IntegralTransform(nn.Module):
 ############
 # GNO Encoder TODO: only for the batch data which share the same graph structure.
 ############
-class GNOEncoder(nn.Module):
+class GNOEncoder_(nn.Module):
     def __init__(self, in_channels, out_channels, gno_config):
         super().__init__()
         self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
@@ -390,7 +392,7 @@ class GNOEncoder(nn.Module):
 ############
 # GNO Decoder
 ############
-class GNODecoder(nn.Module):
+class GNODecoder_(nn.Module):
     def __init__(self, in_channels, out_channels, gno_config):
         super().__init__()
         self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
@@ -471,5 +473,225 @@ class GNODecoder(nn.Module):
         decoded = decoded.permute(0,2,1)
         decoded = self.projection(decoded).permute(0, 2, 1)  
 
+
+        return decoded
+
+
+########################################################
+# Multi-scale GANO
+########################################################
+############
+# GNO Encoder
+############
+class GNOEncoder(nn.Module):
+    def __init__(self, in_channels, out_channels, gno_config):
+        super().__init__()
+        self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
+        self.gno_radius = gno_config.gno_radius
+        self.graph_cache = None 
+        self.use_graph_cache = gno_config.use_graph_cache
+        self.scales = gno_config.scales
+
+        in_kernel_in_dim = gno_config.gno_coord_dim * 2
+        coord_dim = gno_config.gno_coord_dim 
+        if gno_config.node_embedding:
+            in_kernel_in_dim = gno_config.gno_coord_dim * 4 * 2 * 2  # 32
+            coord_dim = gno_config.gno_coord_dim * 4 * 2
+        if gno_config.in_gno_transform_type == "nonlinear" or gno_config.in_gno_transform_type == "nonlinear_kernelonly":
+            in_kernel_in_dim += in_channels
+
+        in_gno_channel_mlp_hidden_layers = gno_config.in_gno_channel_mlp_hidden_layers.copy()
+        in_gno_channel_mlp_hidden_layers.insert(0, in_kernel_in_dim)
+        in_gno_channel_mlp_hidden_layers.append(out_channels)
+
+        self.gno = IntegralTransform(
+            channel_mlp_layers=in_gno_channel_mlp_hidden_layers,
+            transform_type=gno_config.in_gno_transform_type,
+            use_torch_scatter=gno_config.gno_use_torch_scatter,
+            use_attn=gno_config.use_attn,
+            coord_dim=coord_dim,
+            attention_type=gno_config.attention_type
+        )
+
+        self.lifting = ChannelMLP(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            n_layers=1
+        )
+
+        if gno_config.use_geoembed:
+            self.geoembed = GeometricEmbedding(
+                input_dim=gno_config.gno_coord_dim,
+                output_dim=out_channels,
+                method=gno_config.embedding_method
+            )
+            self.recovery = ChannelMLP(
+                in_channels=2 * out_channels,
+                out_channels=out_channels,
+                n_layers=1
+            )
+    
+    def forward(self, graph: RegionInteractionGraph, pndata: torch.Tensor) -> torch.Tensor:
+        batch_size = pndata.shape[0]
+        device = pndata.device
+
+        if self.graph_cache is None:
+            self.input_geom = graph.physical_to_regional.src_ndata['pos'].to(device)
+            self.latent_queries = graph.physical_to_regional.dst_ndata['pos'].to(device)
+            self.spatial_nbrs_scales = []
+            for scale in self.scales:
+                scaled_radius = self.gno_radius * scale
+                spatial_nbrs = self.nb_search(
+                    self.input_geom,
+                    self.latent_queries,
+                    scaled_radius
+                )
+                self.spatial_nbrs_scales.append(spatial_nbrs)
+            if self.use_graph_cache:
+                self.graph_cache = True 
+        
+        pndata = pndata.permute(0, 2, 1)
+        pndata = self.lifting(pndata).permute(0, 2, 1)  
+
+        encoded_scales = []
+
+        for idx, scale in enumerate(self.scales):
+            spatial_nbrs = self.spatial_nbrs_scales[idx]
+            encoded = self.gno(
+                y=graph.physical_to_regional.get_ndata()[0],
+                x=graph.physical_to_regional.get_ndata()[1][:, :-1],
+                f_y=pndata,
+                neighbors=spatial_nbrs
+            )
+
+            if hasattr(self, 'geoembed'):
+                geoembedding = self.geoembed(
+                    self.input_geom,
+                    self.latent_queries,
+                    spatial_nbrs
+                )
+                geoembedding = geoembedding[None, :, :]
+                geoembedding = geoembedding.repeat([batch_size, 1, 1])
+
+                encoded = torch.cat([encoded, geoembedding], dim=-1)
+                encoded = encoded.permute(0, 2, 1)
+                encoded = self.recovery(encoded).permute(0, 2, 1)
+
+            encoded_scales.append(encoded)
+        if len(encoded_scales) == 1:
+            encoded = encoded_scales[0]
+        else:
+            # TODO choose other ways for processing the multi-scale information
+            encoded = torch.stack(encoded_scales, dim=0).sum(dim=0)
+
+        return encoded
+
+
+############
+# GNO Decoder
+############
+
+class GNODecoder(nn.Module):
+    def __init__(self, in_channels, out_channels, gno_config):
+        super().__init__()
+        self.nb_search = NeighborSearch(gno_config.gno_use_open3d)
+        self.gno_radius = gno_config.gno_radius
+        self.graph_cache = None
+        self.use_graph_cache = gno_config.use_graph_cache
+        self.scales = gno_config.scales
+
+        out_kernel_in_dim = gno_config.gno_coord_dim * 2
+        coord_dim = gno_config.gno_coord_dim 
+        if gno_config.node_embedding:
+            out_kernel_in_dim = gno_config.gno_coord_dim * 4 * 2 * 2  # 32
+            coord_dim = gno_config.gno_coord_dim * 4 * 2
+        if gno_config.out_gno_transform_type == "nonlinear" or gno_config.out_gno_transform_type == "nonlinear_kernelonly":
+            out_kernel_in_dim += out_channels
+
+        out_gno_channel_mlp_hidden_layers = gno_config.out_gno_channel_mlp_hidden_layers.copy()
+        out_gno_channel_mlp_hidden_layers.insert(0, out_kernel_in_dim)
+        out_gno_channel_mlp_hidden_layers.append(in_channels)
+
+        self.gno = IntegralTransform(
+            channel_mlp_layers=out_gno_channel_mlp_hidden_layers,
+            transform_type=gno_config.out_gno_transform_type,
+            use_torch_scatter=gno_config.gno_use_torch_scatter,
+            use_attn=gno_config.use_attn,
+            coord_dim=coord_dim,
+            attention_type=gno_config.attention_type
+        )
+
+        self.projection = ChannelMLP(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            hidden_channels=gno_config.projection_channels,
+            n_layers=2,
+            n_dim=1,
+        )
+
+        if gno_config.use_geoembed:
+            self.geoembed = GeometricEmbedding(
+                input_dim=gno_config.gno_coord_dim,
+                output_dim=in_channels,
+                method=gno_config.embedding_method
+            )
+            self.recovery = ChannelMLP(
+                in_channels=2 * in_channels,
+                out_channels=in_channels,
+                n_layers=1
+            )
+
+    def forward(self, graph: RegionInteractionGraph, rndata: torch.Tensor) -> torch.Tensor:
+        batch_size = rndata.shape[0]
+        device = rndata.device
+
+        if self.graph_cache is None:
+            self.input_geom = graph.regional_to_physical.src_ndata['pos'].to(device)
+            self.latent_queries = graph.regional_to_physical.dst_ndata['pos'].to(device)
+            self.spatial_nbrs_scales = []
+            for scale in self.scales:
+                scaled_radius = self.gno_radius * scale
+                spatial_nbrs = self.nb_search(
+                    self.input_geom,
+                    self.latent_queries,
+                    scaled_radius
+                )
+                self.spatial_nbrs_scales.append(spatial_nbrs)
+            if self.use_graph_cache:
+                self.graph_cache = True
+
+        decoded_scales = []
+
+        for idx, scale in enumerate(self.scales):
+            spatial_nbrs = self.spatial_nbrs_scales[idx]
+            decoded = self.gno(
+                y=graph.regional_to_physical.get_ndata()[0],
+                x=graph.regional_to_physical.get_ndata()[1][:, :-1],
+                f_y=rndata,
+                neighbors=spatial_nbrs
+            )
+
+            if hasattr(self, 'geoembed'):
+                geoembedding = self.geoembed(
+                    self.input_geom,
+                    self.latent_queries,
+                    spatial_nbrs
+                )
+                geoembedding = geoembedding[None, :, :]
+                geoembedding = geoembedding.repeat([batch_size, 1, 1])
+
+                decoded = torch.cat([decoded, geoembedding], dim=-1)
+                decoded = decoded.permute(0, 2, 1)
+                decoded = self.recovery(decoded).permute(0, 2, 1)
+
+            decoded_scales.append(decoded)
+
+        if len(decoded_scales) == 1:
+            decoded = decoded_scales[0]
+        else:
+            decoded = torch.stack(decoded_scales, dim=0).sum(dim=0)
+
+        decoded = decoded.permute(0, 2, 1)
+        decoded = self.projection(decoded).permute(0, 2, 1)
 
         return decoded
