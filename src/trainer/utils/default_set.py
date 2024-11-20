@@ -27,6 +27,12 @@ class SetUpConfig:
     ckpt: bool = False
     use_variance_test: bool = False                                         # TODO needs to develop.
     measure_inf_time: bool = False                                          # TODO needs to be examined
+    # Parameters for distributed mode
+    distributed: bool = False
+    world_size: int = 1
+    rank: int = 0
+    local_rank: int = 0
+    backend: str = "nccl"
 
 # For the initialization of RegionInteractionGraph
 @dataclass

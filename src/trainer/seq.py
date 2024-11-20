@@ -1,6 +1,7 @@
 import os 
 import torch
 from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data.distributed import DistributedSampler
 import xarray as xr
 import numpy as np
 from tqdm import tqdm
@@ -536,6 +537,7 @@ class FoundationModelTrainer(TrainerBase):
         self.rigraphs = {}
         self.stats = {}
         self.metadata_dict = {}
+        self.train_samplers = []
 
         for dataset_name, metadata_name in zip(dataset_names, metadata_names):
             dataset_path = os.path.join(base_path, f"{dataset_name}.nc")
@@ -632,13 +634,24 @@ class FoundationModelTrainer(TrainerBase):
             shuffle = dataset_config.shuffle
             num_workers = dataset_config.num_workers
 
+            train_sampler = None
+            if self.setup_config.distributed:
+                train_sampler = DistributedSampler(
+                    train_dataset,
+                    num_replicas=self.setup_config.world_size,
+                    rank=self.setup_config.local_rank
+                )
+                self.train_samplers.append(train_sampler)
+            
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=batch_size,
-                shuffle=shuffle,
+                shuffle=(train_sampler is None),
                 num_workers=num_workers,
-                collate_fn=self.create_collate_fn(dataset_name)
+                collate_fn=self.create_collate_fn(dataset_name),
+                sampler = train_sampler
             )
+
             val_loader = DataLoader(
                 val_dataset,
                 batch_size=batch_size,
@@ -714,6 +727,51 @@ class FoundationModelTrainer(TrainerBase):
             variable_mesh=model_config.variable_mesh,
             config=model_config.args
         )
+
+        self.model.to(self.device)
+        if self.setup_config.distributed:
+            self.model = torch.nn.parallel.DistributedDataParallel(
+                self.model,
+                device_ids=[self.setup_config.local_rank],
+                output_device=self.setup_config.local_rank
+            )
+    
+    def fit(self, verbose=False):
+        result = self.optimizer.optimize(self)
+        
+        
+        # 只在主进程上保存模型
+        if self.setup_config.rank == 0:
+            self.config.datarow['training time'] = result['time']
+            self.save_ckpt()
+
+            if 'train' not in result or len(result['train']['loss']) == 0:
+                if self.setup_config.use_variance_test:
+                    self.variance_test()
+                else:
+                    self.test()
+            else:
+                kwargs = {
+                    "epochs": result['train']['epoch'],
+                    "losses": result['train']['loss']
+                }
+            
+                if "valid" in result:
+                    kwargs['val_epochs'] = result['valid']['epoch']
+                    kwargs['val_losses'] = result['valid']['loss']
+                
+                if "best" in result:
+                    kwargs['best_epoch'] = result['best']['epoch']
+                    kwargs['best_loss'] = result['best']['loss']
+                
+                self.plot_losses(**kwargs)
+
+                if self.setup_config.use_variance_test:
+                    self.variance_test()
+                else:
+                    self.test()
+        else:
+            pass
 
     def train_step(self, batch):
         self.model.train()

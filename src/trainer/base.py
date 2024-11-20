@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import torch.distributed as dist
 
 from .optimizers import AdamOptimizer, AdamWOptimizer, FinetuningOptimizer
 from .utils import manual_seed, load_ckpt, save_ckpt, compute_batch_errors, compute_final_metric
@@ -29,15 +30,19 @@ class TrainerBase:
         
         self.metadata = DATASET_METADATA[self.dataset_config.metaname]
 
-        self.device = self.setup_config.device
-        manual_seed(self.setup_config.seed)
-        if self.setup_config.dtype == "float" or \
-            self.setup_config.dtype == "torch.float32" or \
-            self.setup_config.dtype == "torch.FloatTensor":
+        # initialization the distributed learning environment
+        if self.setup_config.distributed:
+            self.init_distributed_mode()
+            torch.cuda.set_device(self.setup_config.local_rank)
+            self.device = torch.device('cuda', self.setup_config.local_rank)
+        else:
+            self.device = torch.device(self.setup_config.device)
+        
+        manual_seed(self.setup_config.seed + self.setup_config.rank)
+
+        if self.setup_config.dtype in ["float", "torch.float32", "torch.FloatTensor"]:
             self.dtype = torch.float32
-        elif self.setup_config.dtype == "dobule" or \
-            self.setup_config.dtype == "torch.float64" or \
-            self.setup_config.dtype == "torch.DoubleTensor":
+        elif self.setup_config.dtype in ["double", "torch.float64", "torch.DoubleTensor"]:
             self.dtype = torch.float64
         else:
             raise ValueError(f"Invalid dtype: {self.setup_config.dtype}")
@@ -78,6 +83,26 @@ class TrainerBase:
                 "adamw": AdamWOptimizer
             }[self.optimizer_config.name](self.model.parameters(), self.optimizer_config.args)
 
+    def init_distributed_mode(self):
+        if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+            self.setup_config.rank = int(os.environ['RANK'])
+            self.setup_config.world_size = int(os.environ['WORLD_SIZE'])
+            self.setup_config.local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        else:
+            print('Not using distributed mode')
+            self.setup_config.distributed = False
+            self.setup_config.rank = 0
+            self.setup_config.world_size = 1
+            self.setup_config.local_rank = 0
+            return
+
+        dist.init_process_group(
+            backend=self.setup_config.backend,
+            init_method='env://',
+            world_size=self.setup_config.world_size,
+            rank=self.setup_config.rank
+        )
+        dist.barrier()
 # ------------ utils ------------ #
     def to(self, device):
         self.model.to(device)

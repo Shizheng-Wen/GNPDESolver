@@ -1,5 +1,6 @@
 import torch
 from torch.optim.lr_scheduler import _LRScheduler
+import torch.distributed as dist
 from tqdm import tqdm
 import numpy as np
 import time
@@ -477,4 +478,152 @@ class FinetuningOptimizer:
             "time": time_total
         }
 
+class WaveFDOptimizer:
+    optimizer: torch.optim.AdamW
+    scheduler: torch.optim.lr_scheduler._LRScheduler
+    epoch: int
+    batch_size: int
+    lr: float
+    loss_scale: float
+    eval_every_eps: int
+
+    def __init__(self, params, config):
+        self.optimizer = torch.optim.AdamW(params, lr=config.lr, weight_decay=config.weight_decay)
+        self.epoch = config.epoch
+        self.lr = config.lr  
+        self.loss_scale = config.loss_scale
+        self.eval_every_eps = config.eval_every_eps
+        self.early_save_metric = config.early_save_metric.lower()
+
+        if self.early_save_metric not in ['train', 'val']:
+            raise ValueError("`early_save_metric` must be either 'train' or 'val'.")
         
+        if config.scheduler == 'step':
+            self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=config.scheduler_step_size, gamma=config.scheduler_gamma)
+        elif config.scheduler == 'cos':
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=config.scheduler_T_max, eta_min=config.scheduler_eta_min)
+        elif config.scheduler == 'exp':
+            self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=config.scheduler_gamma)
+        elif config.scheduler == 'mix':
+            warmup_epochs = int(0.02 * self.epoch)
+            cosine_epochs = int(0.90 * self.epoch)
+            exp_decay_epochs = self.epoch - warmup_epochs - cosine_epochs
+            if warmup_epochs == 0:
+                warmup_epochs = 1
+                cosine_epochs -= 1
+            if exp_decay_epochs == 0:
+                exp_decay_epochs = 1
+                cosine_epochs -= 1
+            self.scheduler = CustomLRScheduler(
+                optimizer=self.optimizer,
+                total_epochs=self.epoch,
+                warmup_epochs=warmup_epochs,
+                cosine_epochs=cosine_epochs,
+                exp_decay_epochs=exp_decay_epochs,
+                initial_lr=self.lr,
+                max_lr=config.max_lr,
+                min_lr=config.min_lr,
+                final_lr=config.final_lr
+            )
+        else:
+            self.scheduler = None
+
+    def optimize(self, trainer: 'TrainerBase',
+                    description: str = "AdamOptimizer",
+                    color: str = "blue"):
+        time_total = 0.0
+        best_loss, best_epoch, best_state = np.inf, -1, None
+        losses = []
+        epochs = []
+        val_epochs = []
+        val_losses = []
+
+        if trainer.setup_config.rank == 0:
+            pbar = tqdm(total=self.epoch, desc=description, colour=color)
+        else:
+            pbar = None
+
+        for epoch in range(self.epoch):
+            trainer.model.train()
+
+            if trainer.setup_config.distributed:
+                for sampler in trainer.train_samplers:
+                    sampler.set_epoch(epoch)
+
+            total_loss = 0.0
+            for batch in trainer.train_loader:
+                start_time = time.time()
+                self.optimizer.zero_grad()
+                train_loss = trainer.train_step(batch)
+                train_loss.backward()
+                self.optimizer.step()
+                total_loss += train_loss.item()
+                if trainer.device.type == 'cuda':
+                    torch.cuda.synchronize()
+                time_total += time.time() - start_time
+            
+            if self.scheduler is not None:
+                self.scheduler.step()
+        
+            if pbar is not None:
+                pbar.update(1)
+
+            if (epoch + 1) % self.eval_every_eps == 0:
+                train_loss = total_loss / len(trainer.train_loader)
+
+                if trainer.setup_config.distributed:
+                    train_loss_tensor = torch.tensor(train_loss, device=trainer.device)
+                    dist.all_reduce(train_loss_tensor, op=dist.ReduceOp.SUM)
+                    train_loss = train_loss_tensor.item() / trainer.setup_config.world_size
+
+                if trainer.setup_config.rank == 0:
+                    losses.append(train_loss)
+                    epochs.append(epoch)
+                    val_loss = trainer.validate(trainer.val_loader)
+                    if pbar is not None:
+                        pbar.set_postfix({"loss": train_loss, "val_loss": val_loss})
+                    val_losses.append(val_loss)
+                    val_epochs.append(epoch)
+
+                    if self.early_save_metric == 'val':
+                        current_loss = val_loss
+                    else:
+                        current_loss = train_loss
+
+                    if current_loss < best_loss:
+                        best_loss = current_loss
+                        best_epoch = epoch
+                        best_state = deepcopy(trainer.model.state_dict())
+                else:
+                    pass
+
+        if trainer.setup_config.rank == 0 and best_state is not None:
+            trainer.model.load_state_dict(best_state)
+
+        if trainer.setup_config.distributed:
+            for param in trainer.model.parameters():
+                dist.broadcast(param.data, src=0)
+
+        if pbar is not None:
+            pbar.close()
+        
+        if trainer.setup_config.rank == 0:
+            return {
+                "train": {
+                    "loss": losses,
+                    "epoch": epochs,
+                },
+                "valid": {
+                    "loss": val_losses,
+                    "epoch": val_epochs,
+                },
+                "best": {
+                    "epoch": best_epoch,
+                    "loss": best_loss,
+                },
+                "time": time_total
+            }
+        else:
+            return {
+                "time": time_total
+            }

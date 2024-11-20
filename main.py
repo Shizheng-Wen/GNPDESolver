@@ -11,6 +11,7 @@ from omegaconf import OmegaConf
 from multiprocessing import Pool,Process
 import subprocess
 import platform
+import torch.distributed as dist
 
 from src.trainer.seq import SequentialTrainer, FoundationModelTrainer
 from src.trainer.stat import StaticTrainer,StaticTrainer_unstructured, StaticTrainer_test, StaticTrainer_unstructured
@@ -90,6 +91,15 @@ def run_arg(arg):
     arg.datarow['relative error (direct)'] = np.nan
     arg.datarow['relative error (auto2)'] = np.nan
     arg.datarow['relative error (auto4)'] = np.nan
+
+    # Initialize distributed mode
+    if getattr(arg.setup, "distributed", False):
+        init_distributed_mode(arg)
+        torch.cuda.set_device(arg.setup.local_rank)
+        arg.setup.device = f"cuda:{arg.setup.local_rank}"
+    else:
+        arg.setup.device = arg.setup.device
+
     Trainer = {
         "sequential": SequentialTrainer,
         "static": StaticTrainer,
@@ -109,13 +119,13 @@ def run_arg(arg):
         else:
             t.test()
 
-
-    if os.path.exists(arg.path["database_path"]):
-        database = pd.read_csv(arg.path["database_path"])
-    else:
-        database = pd.DataFrame(columns=arg.datarow.keys())
-    database.loc[len(database)] = arg.datarow
-    database.to_csv(arg.path["database_path"], index=False)
+    if getattr(arg.setup, "rank", 0) == 0:
+        if os.path.exists(arg.path["database_path"]):
+            database = pd.read_csv(arg.path["database_path"])
+        else:
+            database = pd.DataFrame(columns=arg.datarow.keys())
+        database.loc[len(database)] = arg.datarow
+        database.to_csv(arg.path["database_path"], index=False)
 
     return t
 
@@ -170,6 +180,27 @@ def run_arg_files(arg_files, is_debug, num_works_per_device=3):
                     p.join()
     else:
         raise NotImplementedError(f"Platform {platform.system()} not supported")
+
+def init_distributed_mode(arg):
+    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+        arg.setup.rank = int(os.environ['RANK'])
+        arg.setup.world_size = int(os.environ['WORLD_SIZE'])
+        arg.setup.local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    else:
+        print('Not using distributed mode')
+        arg.setup.distributed = False
+        arg.setup.rank = 0
+        arg.setup.world_size = 1
+        arg.setup.local_rank = 0
+        return
+
+    dist.init_process_group(
+        backend=arg.setup.backend,
+        init_method='env://',
+        world_size=arg.setup.world_size,
+        rank=arg.setup.rank
+    )
+    dist.barrier()
 
 if __name__ == '__main__':
     config = parse_files()

@@ -192,20 +192,23 @@ class CombinedDataLoader:
     def __iter__(self):
         self.loaders_iters = [iter(loader) for loader in self.loaders]
         self.loader_indices = list(range(len(self.loaders_iters)))
+        self.current_idx = 0
         return self
 
     def __next__(self):
         if not self.loader_indices:
             raise StopIteration
         while self.loader_indices:
-            idx = random.choice(self.loader_indices)
+            idx = self.loader_indices[self.current_idx % len(self.loader_indices)]
             try:
                 batch = next(self.loaders_iters[idx])
+                self.current_idx += 1
                 return batch
             except StopIteration:
                 self.loader_indices.remove(idx)
                 if not self.loader_indices:
                     raise StopIteration
+                self.current_idx = self.current_idx % len(self.loader_indices)
                 continue
         raise StopIteration
 
