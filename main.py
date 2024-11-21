@@ -93,12 +93,12 @@ def run_arg(arg):
     arg.datarow['relative error (auto4)'] = np.nan
 
     # Initialize distributed mode
-    if getattr(arg.setup, "distributed", False):
-        init_distributed_mode(arg)
-        torch.cuda.set_device(arg.setup.local_rank)
-        arg.setup.device = f"cuda:{arg.setup.local_rank}"
-    else:
-        arg.setup.device = arg.setup.device
+    # if getattr(arg.setup, "distributed", False):
+    #     init_distributed_mode(arg)
+    #     torch.cuda.set_device(arg.setup.local_rank)
+    #     arg.setup.device = f"cuda:{arg.setup.local_rank}"
+    # else:
+    #     arg.setup.device = arg.setup.device
 
     Trainer = {
         "sequential": SequentialTrainer,

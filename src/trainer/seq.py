@@ -745,33 +745,34 @@ class FoundationModelTrainer(TrainerBase):
             self.config.datarow['training time'] = result['time']
             self.save_ckpt()
 
-            if 'train' not in result or len(result['train']['loss']) == 0:
-                if self.setup_config.use_variance_test:
-                    self.variance_test()
-                else:
-                    self.test()
+        if 'train' not in result or len(result['train']['loss']) == 0:
+            if self.setup_config.use_variance_test:
+                self.variance_test()
             else:
-                kwargs = {
-                    "epochs": result['train']['epoch'],
-                    "losses": result['train']['loss']
-                }
+                pass
+                self.test()
+        else:
+            kwargs = {
+                "epochs": result['train']['epoch'],
+                "losses": result['train']['loss']
+            }
+        
+            if "valid" in result:
+                kwargs['val_epochs'] = result['valid']['epoch']
+                kwargs['val_losses'] = result['valid']['loss']
             
-                if "valid" in result:
-                    kwargs['val_epochs'] = result['valid']['epoch']
-                    kwargs['val_losses'] = result['valid']['loss']
-                
-                if "best" in result:
-                    kwargs['best_epoch'] = result['best']['epoch']
-                    kwargs['best_loss'] = result['best']['loss']
-                
+            if "best" in result:
+                kwargs['best_epoch'] = result['best']['epoch']
+                kwargs['best_loss'] = result['best']['loss']
+            
+            if self.setup_config.rank == 0:
                 self.plot_losses(**kwargs)
 
-                if self.setup_config.use_variance_test:
-                    self.variance_test()
-                else:
-                    self.test()
-        else:
-            pass
+            if self.setup_config.use_variance_test:
+                self.variance_test()
+            else:
+                pass
+                self.test()
 
     def train_step(self, batch):
         self.model.train()
@@ -933,7 +934,11 @@ class FoundationModelTrainer(TrainerBase):
                     collate_fn=self.create_collate_fn(dataset_name)
                 )
 
-                pbar = tqdm(total=len(test_loader), desc=f"Testing {dataset_name} ({mode})", colour="blue")
+                if self.setup_config.rank == 0:
+                    pbar = tqdm(total=len(test_loader), desc=f"Testing {dataset_name} ({mode})", colour="blue")
+                else:
+                    pbar = None
+                
                 with torch.no_grad():
                     for i, (dataset_names, x_batch, y_batch) in enumerate(test_loader):
                         x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
@@ -956,7 +961,10 @@ class FoundationModelTrainer(TrainerBase):
                         else:
                             raise ValueError(f"Unknown metric: {self.dataset_config.metric}")
                         all_relative_errors.append(relative_errors)
-                        pbar.update(1)
+                        
+                        if pbar is not None:
+                            pbar.update(1)
+
                         if example_data is None:
                             example_data = {
                                 'coords': self.rigraphs[dataset_name].physical_to_regional.src_ndata['pos'].cpu().numpy(),
@@ -965,13 +973,15 @@ class FoundationModelTrainer(TrainerBase):
                                 'time_indices': time_indices,
                                 't_values': test_dataset.t_values
                             }
+                    if pbar is not None:
+                        pbar.close()
 
-                    pbar.close()
 
                 all_relative_errors = torch.cat(all_relative_errors, dim=0)
                 final_metric = compute_final_metric(all_relative_errors)
                 errors_dict[mode] = final_metric
-            print(f"Results for {dataset_name}: {errors_dict}")
+            if self.setup_config.rank == 0:
+                print(f"Results for {dataset_name}: {errors_dict}")
 
             # if example_data is not None:
             #     self.plot_results(

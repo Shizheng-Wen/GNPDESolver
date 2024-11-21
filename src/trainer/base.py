@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch.distributed as dist
 
-from .optimizers import AdamOptimizer, AdamWOptimizer, FinetuningOptimizer
+from .optimizers import AdamOptimizer, AdamWOptimizer, FinetuningOptimizer, WaveFDOptimizer
 from .utils import manual_seed, load_ckpt, save_ckpt, compute_batch_errors, compute_final_metric
 from .utils import SetUpConfig, GraphConfig, ModelConfig, DatasetConfig, OptimizerConfig, PathConfig, merge_config
 from ..data.dataset import Metadata, DATASET_METADATA
@@ -53,15 +53,16 @@ class TrainerBase:
         self.init_model(self.model_config)
         self.init_optimizer(self.optimizer_config)
 
-        nparam = sum(
-            [p.numel() * 2 if p.is_complex() else p.numel() for p in self.model.parameters()]
-        )
-        nbytes = sum(
-            [p.numel() * 2 * p.element_size() if p.is_complex() else p.numel() * p.element_size() for p in self.model.parameters()]
-        )
-        print(f"Number of parameters: {nparam}")
-        args.datarow['nparams'] = nparam
-        args.datarow['nbytes'] = nbytes
+        if self.setup_config.rank == 0:
+            nparam = sum(
+                [p.numel() * 2 if p.is_complex() else p.numel() for p in self.model.parameters()]
+            )
+            nbytes = sum(
+                [p.numel() * 2 * p.element_size() if p.is_complex() else p.numel() * p.element_size() for p in self.model.parameters()]
+            )
+            print(f"Number of parameters: {nparam}")
+            args.datarow['nparams'] = nparam
+            args.datarow['nbytes'] = nbytes
 
 # ------------ init ------------ #
     def init_dataset(self, dataset_config):
@@ -80,7 +81,8 @@ class TrainerBase:
         else:
             self.optimizer = {
                 "adam": AdamOptimizer,
-                "adamw": AdamWOptimizer
+                "adamw": AdamWOptimizer,
+                "wavefd": WaveFDOptimizer
             }[self.optimizer_config.name](self.model.parameters(), self.optimizer_config.args)
 
     def init_distributed_mode(self):

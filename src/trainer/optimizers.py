@@ -266,7 +266,7 @@ class AdamWOptimizer:
                 train_loss.backward()
                 self.optimizer.step()
                 total_loss += train_loss.item()
-                if trainer.device.startswith('cuda'):
+                if trainer.device.type == 'cuda':
                     torch.cuda.synchronize()
                 time_total += time.time() - start_time
 
@@ -429,7 +429,7 @@ class FinetuningOptimizer:
                 torch.nn.utils.clip_grad_norm_(trainer.model.parameters(), self.max_grad_norm) # Gradient_clip
                 self.optimizer.step()
                 total_loss += train_loss.item()
-                if trainer.device.startswith('cuda'):
+                if trainer.device.type == 'cuda':
                     torch.cuda.synchronize()
                 time_total += time.time() - start_time
 
@@ -570,6 +570,7 @@ class WaveFDOptimizer:
 
             if (epoch + 1) % self.eval_every_eps == 0:
                 train_loss = total_loss / len(trainer.train_loader)
+                val_loss = trainer.validate(trainer.val_loader)
 
                 if trainer.setup_config.distributed:
                     train_loss_tensor = torch.tensor(train_loss, device=trainer.device)
@@ -579,7 +580,6 @@ class WaveFDOptimizer:
                 if trainer.setup_config.rank == 0:
                     losses.append(train_loss)
                     epochs.append(epoch)
-                    val_loss = trainer.validate(trainer.val_loader)
                     if pbar is not None:
                         pbar.set_postfix({"loss": train_loss, "val_loss": val_loss})
                     val_losses.append(val_loss)
