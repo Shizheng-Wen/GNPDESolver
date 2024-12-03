@@ -3,9 +3,6 @@ import torch
 import random
 
 def manual_seed(seed):
-    # torch.manual_seed(seed)
-    # torch.cuda.manual_seed(seed)
-    # np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
@@ -37,7 +34,11 @@ def save_ckpt(path, **kwargs):
         
     """
     for k, v in kwargs.items():
-        kwargs[k] = v.state_dict()
+        # Examine whether we need to wrap the model
+        if isinstance(v, (torch.nn.DataParallel, torch.nn.parallel.DistributedDataParallel)):
+            kwargs[k] = v.state_dict()  # save the wrapped model, includding the 'module.' prefix
+        else:
+            kwargs[k] = v.state_dict()
     torch.save(kwargs, path)
 
 def load_ckpt(path, **kwargs):
@@ -63,5 +64,22 @@ def load_ckpt(path, **kwargs):
     """
     ckpt = torch.load(path)
     for k, v in kwargs.items():
-        kwargs[k].load_state_dict(ckpt[k])
+        state_dict = ckpt[k]
+        model_keys = v.state_dict().keys()
+        ckpt_keys = state_dict.keys()
+
+        if all(key.startswith('module.') for key in ckpt_keys) and not any(key.startswith('module.') for key in model_keys):
+            new_state_dict = {}
+            for key in ckpt_keys:
+                new_key = key.replace('module.', '', 1)
+                new_state_dict[new_key] = state_dict[key]
+            state_dict = new_state_dict
+        elif not any(key.startswith('module.') for key in ckpt_keys) and all(key.startswith('module.') for key in model_keys):
+            new_state_dict = {}
+            for key in ckpt_keys:
+                new_key = 'module.' + key
+                new_state_dict[new_key] = state_dict[key]
+            state_dict = new_state_dict
+
+        v.load_state_dict(state_dict)
     return [i for i in kwargs.values()]

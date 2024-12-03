@@ -24,10 +24,30 @@ from src.model import init_model_from_rigraph
 EPSILON = 1e-10
 
 class SequentialTrainer(TrainerBase):
+    """
+    Trainer for sequential data using a single dataset and a neural operator model.
+    """
+
     def __init__(self, args):
+        """
+        Initialize the SequentialTrainer.
+
+        Args:
+            args (Namespace): Configuration arguments for the trainer.
+        """
         super().__init__(args)
     
     def init_dataset(self, dataset_config):
+        """
+        Initialize the dataset for training, validation, and testing.
+
+        Args:
+            dataset_config (DatasetConfig): Configuration for the dataset, including paths, sizes, and other settings.
+
+        Returns:
+            None
+        """
+
         base_path = dataset_config.base_path
         dataset_name = dataset_config.name
         dataset_path = os.path.join(base_path, f"{dataset_name}.nc")
@@ -129,6 +149,16 @@ class SequentialTrainer(TrainerBase):
         self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=self.collate_fn)
 
     def collate_fn(self, batch):
+        """
+        Custom collate function to prepare batches for the DataLoader.
+
+        Args:
+            batch (list): List of tuples where each tuple contains input and output arrays.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: A tuple containing batched inputs and outputs as tensors.
+        """
+
         input_list, output_list = zip(*batch) # unzip the batch, both inputs and outputs are lists of tuples
         inputs = np.stack(input_list) # shape: [batch_size, num_nodes, input_dim]
         outputs = np.stack(output_list) # shape: [batch_size, num_nodes, output_dim]
@@ -139,6 +169,16 @@ class SequentialTrainer(TrainerBase):
         return inputs, outputs
 
     def init_graph(self, graph_config):
+        """
+        Initialize the region interaction graph (RIGraph) for the model.
+
+        Args:
+            graph_config (GraphConfig): Configuration for the graph, including parameters like radius and edge attributes.
+
+        Returns:
+            None
+        """
+
         self.rigraph = RegionInteractionGraph.from_point_cloud(points = self.x_train[0][0],
                                               phy_domain=self.metadata.domain_x,
                                               **shallow_asdict(graph_config)
@@ -149,6 +189,16 @@ class SequentialTrainer(TrainerBase):
         self.config.datarow['r2p edges'] = self.rigraph.regional_to_physical.num_edges
 
     def init_model(self, model_config):
+        """
+        Initialize the neural operator model (Encoder-Processor-Decoder).
+
+        Args:
+            model_config (ModelConfig): Configuration for the model, including model name, edge dropout rate, and other settings.
+
+        Returns:
+            None
+        """
+
         in_channels = self.stats["u"]["mean"].shape[0] + 2 # add lead time and time difference
         
         if model_config.use_conditional_norm:
@@ -169,6 +219,16 @@ class SequentialTrainer(TrainerBase):
                                             )
 
     def train_step(self, batch):
+        """
+        Perform a single training step.
+
+        Args:
+            batch (Tuple[torch.Tensor, torch.Tensor]): A tuple containing batched inputs and outputs.
+
+        Returns:
+            torch.Tensor: The computed loss for the batch.
+        """
+
         self.model.drop_edge = self.model_config.drop_edge
         batch_inputs, batch_outputs = batch
         batch_inputs, batch_outputs = batch_inputs.to(self.device), batch_outputs.to(self.device) # Shape: [batch_size, num_nodes, num_channels]
@@ -180,6 +240,16 @@ class SequentialTrainer(TrainerBase):
         return self.loss_fn(pred, batch_outputs)
     
     def validate(self, loader):
+        """
+        Validate the model on a given dataset loader.
+
+        Args:
+            loader (DataLoader): DataLoader for the validation dataset.
+
+        Returns:
+            float: The average loss over the validation dataset.
+        """
+
         self.model.eval()
         self.model.drop_edge = 0.0
         total_loss = 0.0
@@ -293,10 +363,16 @@ class SequentialTrainer(TrainerBase):
         return predictions
         
     def test(self):
+        """
+        Evaluate the trained model on the test dataset and optionally plot results.
+
+        Returns:
+            None
+        """
+
         self.model.eval()
         self.model.to(self.device)
         self.model.drop_edge = 0.0
-
         if self.dataset_config.predict_mode == "all":
             modes = ["autoregressive", "direct", "star"]
         else:
@@ -313,6 +389,8 @@ class SequentialTrainer(TrainerBase):
                 time_indices = np.array([0, 14])
             elif mode == "star":
                 time_indices = np.array([0, 4, 8, 12, 14])
+            elif mode == "fracture":
+                time_indices = np.arange(0, 10, 2)
             else:
                 raise ValueError(f"Unknown predict_mode: {mode}")
     
@@ -493,6 +571,13 @@ class SequentialTrainer(TrainerBase):
         plt.close()
 
     def measure_inference_time(self):
+        """
+        Measure the inference time of the model and print the average over multiple runs.
+
+        Returns:
+            None
+        """
+
         import time
         self.model.eval()
         self.model.to(self.device)
@@ -524,10 +609,31 @@ class SequentialTrainer(TrainerBase):
 #######################################
 
 class FoundationModelTrainer(TrainerBase):
+    """
+    Trainer for foundation models using multiple datasets and data parallelism.
+    """
+
     def __init__(self, args):
+        """
+        Initialize the FoundationModelTrainer.
+
+        Args:
+            args (Namespace): Configuration arguments for the trainer.
+        """
+
         super().__init__(args)
 
     def init_dataset(self, dataset_config):
+        """
+        Initialize datasets for multiple data sources.
+
+        Args:
+            dataset_config (DatasetConfig): Configuration for the datasets, including paths, names, and other settings.
+
+        Returns:
+            None
+        """
+
         base_path  = dataset_config.base_path
         dataset_names = dataset_config.names
         metadata_names = dataset_config.metanames
@@ -693,6 +799,16 @@ class FoundationModelTrainer(TrainerBase):
         self.val_loader = None
 
     def create_collate_fn(self, dataset_name):
+        """
+        Create a custom collate function for each dataset.
+
+        Args:
+            dataset_name (str): Name of the dataset.
+
+        Returns:
+            Callable: A collate function that adds dataset name to each batch.
+        """
+
         def collate_fn(batch):
             input_list, output_list = zip(*batch)
             inputs = np.stack(input_list)
@@ -703,6 +819,16 @@ class FoundationModelTrainer(TrainerBase):
         return collate_fn
     
     def init_graph(self, graph_config):
+        """
+        Graphs are initialized in init_dataset for each dataset.
+
+        Args:
+            graph_config (GraphConfig): Configuration for the graphs.
+
+        Returns:
+            None
+        """
+
         pass
 
     def init_model(self, model_config):
@@ -852,7 +978,6 @@ class FoundationModelTrainer(TrainerBase):
             input_features.append(time_diff_expanded)
             x_input = torch.cat(input_features, dim=-1)
 
-            # 前向传播
             with torch.no_grad():
                 if self.model_config.use_conditional_norm:
                     pred = self.model(rigraph, x_input[..., :-1], x_input[..., 0, -2:-1])
@@ -966,10 +1091,13 @@ class FoundationModelTrainer(TrainerBase):
                             pbar.update(1)
 
                         if example_data is None:
+                            u_in_dim = stats["u"]["std"].shape[0]
+                            x_batch_input = x_batch[...,:u_in_dim].cpu().numpy() * stats["u"]["std"] + stats["u"]["mean"]
                             example_data = {
+                                'input': x_batch_input[0],
                                 'coords': self.rigraphs[dataset_name].physical_to_regional.src_ndata['pos'].cpu().numpy(),
-                                'gt_sequence': y_batch_de_norm[0].cpu().numpy(),
-                                'pred_sequence': pred_de_norm[0].cpu().numpy(),
+                                'gt_sequence': np.concatenate((x_batch_input[0:1], y_batch_de_norm[0].cpu().numpy()),axis=0),
+                                'pred_sequence': np.concatenate((x_batch_input[0:1],pred_de_norm[0].cpu().numpy()),axis=0),
                                 'time_indices': time_indices,
                                 't_values': test_dataset.t_values
                             }
@@ -983,27 +1111,36 @@ class FoundationModelTrainer(TrainerBase):
             if self.setup_config.rank == 0:
                 print(f"Results for {dataset_name}: {errors_dict}")
 
-            # if example_data is not None:
-            #     self.plot_results(
-            #         coords=example_data['coords'],
-            #         gt_sequence=example_data['gt_sequence'],
-            #         pred_sequence=example_data['pred_sequence'],
-            #         time_indices=example_data['time_indices'],
-            #         t_values=example_data['t_values'],
-            #         num_frames=5
-            #     )
+                self.config.datarow[f"{dataset_name} relative error"] = errors_dict
+                if example_data is not None:
+                    self.plot_results(
+                        coords=example_data['coords'],
+                        input = example_data['input'],
+                        gt_sequence=example_data['gt_sequence'],
+                        pred_sequence=example_data['pred_sequence'],
+                        time_indices=example_data['time_indices'],
+                        t_values=example_data['t_values'],
+                        dataset_name=dataset_name,
+                        num_frames=example_data['gt_sequence'].shape[0],
+                    )
     
-    def plot_results(self, coords, gt_sequence, pred_sequence, time_indices, t_values, num_frames=5):
+    def plot_results(self, coords, input, gt_sequence, pred_sequence, time_indices, t_values, dataset_name, num_frames=5):
         """
         Plots several frames of ground truth and predicted results using contour plots for all variables.
 
         Args:
-            coords (numpy.ndarray): Coordinates of the nodes. Shape: [num_nodes, num_dims]
-            gt_sequence (numpy.ndarray): Ground truth sequence. Shape: [num_timesteps, num_nodes, num_vars]
-            pred_sequence (numpy.ndarray): Predicted sequence. Shape: [num_timesteps, num_nodes, num_vars]
+            coords (numpy.ndarray): Coordinates of the nodes. Shape: [num_nodes, num_dims].
+            input  (numpy.ndarray): input for the model. Shape: [num_nodes, num_input_channels]
+            gt_sequence (numpy.ndarray): Ground truth sequence. Shape: [num_timesteps, num_nodes, num_vars].
+            pred_sequence (numpy.ndarray): Predicted sequence. Shape: [num_timesteps, num_nodes, num_vars].
             time_indices (np.ndarray): Array of time indices used in the prediction.
             t_values (np.ndarray): Actual time values corresponding to the time indices.
+            dataset_name (str): Name of the dataset, which will be included in the saved file name.
             num_frames (int): Number of frames to plot. Defaults to 5.
+
+        Saves:
+            A plot in the specified results directory, with the file name dynamically including the dataset name.
+            For example: ".results/lano/fd/wave_parallel_<dataset_name>.png".
         """
         num_timesteps = gt_sequence.shape[0]
         num_nodes = coords.shape[0]
@@ -1037,7 +1174,7 @@ class FoundationModelTrainer(TrainerBase):
             vmin = vmin_list[variable_idx]
             vmax = vmax_list[variable_idx]
             for i, frame_idx in enumerate(frame_indices):
-                time_idx = time_indices[frame_idx + 1]  # +1 because gt_sequence and pred_sequence start from time_indices[1:]
+                time_idx = time_indices[frame_idx]  # +1 because gt_sequence and pred_sequence start from time_indices[1:]
                 time_value = t_values[time_idx]
 
                 gt = gt_sequence[frame_idx][:, variable_idx]
@@ -1076,5 +1213,7 @@ class FoundationModelTrainer(TrainerBase):
                 plt.colorbar(ct_error, ax=ax_error)
 
         plt.tight_layout()
-        plt.savefig(self.path_config.result_path)
+        base_path, ext = os.path.splitext(self.path_config.result_path)
+        new_save_path = f"{base_path}_{dataset_name}{ext}"
+        plt.savefig(new_save_path)
         plt.close()

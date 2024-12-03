@@ -16,4 +16,5 @@ config/*
 !config/tpl/
 !config/tpl/**
 
-config1/*
+
+tests/preprocess/*
