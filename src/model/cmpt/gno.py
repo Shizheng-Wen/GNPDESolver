@@ -19,6 +19,7 @@ class GNOConfig:
     lifting_channels: int = 16
     gno_radius: float = 0.033
     scales: list = field(default_factory=lambda: [1.0])
+    use_scale_weights: bool = False
     use_graph_cache: bool = True
     gno_use_open3d: bool = False
     in_gno_transform_type: str = 'linear'
@@ -491,6 +492,7 @@ class GNOEncoder(nn.Module):
         self.graph_cache = None 
         self.use_graph_cache = gno_config.use_graph_cache
         self.scales = gno_config.scales
+        self.use_scale_weights = gno_config.use_scale_weights
 
         in_kernel_in_dim = gno_config.gno_coord_dim * 2
         coord_dim = gno_config.gno_coord_dim 
@@ -530,6 +532,16 @@ class GNOEncoder(nn.Module):
                 out_channels=out_channels,
                 n_layers=1
             )
+        
+        if self.use_scale_weights:
+            self.num_scales = len(self.scales)
+            self.coord_dim = coord_dim
+            self.scale_weighting = nn.Sequential(
+                nn.Linear(self.coord_dim, 16),
+                nn.ReLU(),
+                nn.Linear(16, self.num_scales)
+            )
+            self.scale_weight_activation = nn.Softmax(dim=-1)
     
     def forward(self, graph: RegionInteractionGraph, pndata: torch.Tensor) -> torch.Tensor:
         batch_size = pndata.shape[0]
@@ -581,8 +593,20 @@ class GNOEncoder(nn.Module):
         if len(encoded_scales) == 1:
             encoded = encoded_scales[0]
         else:
-            # TODO choose other ways for processing the multi-scale information
-            encoded = torch.stack(encoded_scales, dim=0).sum(dim=0)
+            if self.use_scale_weights:
+                query_coords = self.latent_queries # [num_query_points, coord_dim]
+                scale_weights = self.scale_weighting(query_coords)  # [num_query_points, num_scales]
+                scale_weights = self.scale_weight_activation(scale_weights)  # [num_query_points, num_scales]
+                scale_weights = scale_weights.permute(1, 0)  # [num_scales, num_query_points]
+
+                scale_weights = scale_weights.unsqueeze(0).unsqueeze(-1) # [1, num_scales, num_query_points,1]
+                scale_weights = scale_weights.repeat(batch_size, 1, 1, 1) # [batch_size, num_scales, num_query_points,1]]
+                encoded_scales_tensor = torch.stack(encoded_scales, dim=0) ## [num_scales, batch_size, num_query_points, feature_dim]
+                encoded_scales_tensor = encoded_scales_tensor.permute(1, 0, 2, 3)
+                weighted_encoded_scales = encoded_scales_tensor * scale_weights
+                encoded = weighted_encoded_scales.sum(dim=1)  # [batch_size, num_query_points, feature_dim]
+            else:
+                encoded = torch.stack(encoded_scales, dim=0).sum(dim=0)
 
         return encoded
 
@@ -599,6 +623,7 @@ class GNODecoder(nn.Module):
         self.graph_cache = None
         self.use_graph_cache = gno_config.use_graph_cache
         self.scales = gno_config.scales
+        self.use_scale_weights = gno_config.use_scale_weights
 
         out_kernel_in_dim = gno_config.gno_coord_dim * 2
         coord_dim = gno_config.gno_coord_dim 
@@ -640,6 +665,16 @@ class GNODecoder(nn.Module):
                 out_channels=in_channels,
                 n_layers=1
             )
+
+        if self.use_scale_weights:
+            self.num_scales = len(self.scales)
+            self.coord_dim = coord_dim
+            self.scale_weighting = nn.Sequential(
+                nn.Linear(self.coord_dim, 16),
+                nn.ReLU(),
+                nn.Linear(16, self.num_scales)
+            )
+            self.scale_weight_activation = nn.Softmax(dim=-1)  
 
     def forward(self, graph: RegionInteractionGraph, rndata: torch.Tensor) -> torch.Tensor:
         batch_size = rndata.shape[0]
@@ -689,7 +724,21 @@ class GNODecoder(nn.Module):
         if len(decoded_scales) == 1:
             decoded = decoded_scales[0]
         else:
-            decoded = torch.stack(decoded_scales, dim=0).sum(dim=0)
+            if self.use_scale_weights:
+                query_coords = self.latent_queries  # [num_query_points, coord_dim]
+                scale_weights = self.scale_weighting(query_coords)  # [num_query_points, num_scales]
+                scale_weights = self.scale_weight_activation(scale_weights)  # [num_query_points, num_scales]
+
+                scale_weights = scale_weights.permute(1, 0)  # [num_scales, num_query_points]
+                scale_weights = scale_weights.unsqueeze(0).unsqueeze(-1)  # [1, num_scales, num_query_points, 1]
+                scale_weights = scale_weights.repeat(batch_size, 1, 1, 1)  # [batch_size, num_scales, num_query_points, 1]
+
+                decoded_scales_tensor = torch.stack(decoded_scales, dim=0)
+                decoded_scales_tensor = decoded_scales_tensor.permute(1, 0, 2, 3)
+                weighted_decoded_scales = decoded_scales_tensor * scale_weights
+                decoded = weighted_decoded_scales.sum(dim=1)  # [batch_size, num_query_points, feature_dim]
+            else:
+                decoded = torch.stack(decoded_scales, dim=0).sum(dim=0)
 
         decoded = decoded.permute(0, 2, 1)
         decoded = self.projection(decoded).permute(0, 2, 1)
