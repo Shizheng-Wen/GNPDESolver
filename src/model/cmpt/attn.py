@@ -38,10 +38,12 @@ class TransformerConfig:
     use_ffn_norm: bool = True
     norm_eps: float = 1e-6
     num_layers: int = 3
-    positional_embedding: str = 'absolute'
+    axis_concatenated: bool = False
+    positional_embedding: str = 'absolute' # decided whether to use concatenated axis features for attention
     use_long_range_skip: bool = True #Set it to True for UViT processor
     attn_config: AttentionConfig = field(default_factory=AttentionConfig)
     ffn_config: FFNConfig = field(default_factory=FFNConfig)
+    
 
 """
 Reference: https://github.com/meta-llama/llama3/blob/main/llama/model.py
@@ -237,6 +239,7 @@ class TransformerBlock(nn.Module):
         kwargs.pop("positional_embedding")
         kwargs.pop("use_long_range_skip")
         kwargs.pop("patch_size")
+        kwargs.pop("axis_concatenated")
         return cls(input_size, output_size, skip_connection=skip_connection, **kwargs)
 
 class Transformer(nn.Module):
