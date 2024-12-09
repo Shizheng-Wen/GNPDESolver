@@ -221,13 +221,12 @@ class IntegralTransform(nn.Module):
                 query = self.query_proj(query_coords)  # [num_neighbors, attention_dim]
                 key = self.key_proj(key_coords)        # [num_neighbors, attention_dim]
 
-                attention_scores = torch.sum(query * key, dim=-1) * self.scaling_factor  # [num_neighbors]
-
+                attention_scores = torch.sum(query * key, dim=-1) * self.scaling_factor  # [num_neighbors] 
+                
             elif self.attention_type == 'cosine':
                 query_norm = F.normalize(query_coords, p=2, dim=-1)
                 key_norm = F.normalize(key_coords, p=2, dim=-1)
                 attention_scores = torch.sum(query_norm * key_norm, dim=-1)  # [num_neighbors]
-
             else:
                 raise ValueError(f"Invalid attention_type: {self.attention_type}. Must be 'cosine' or 'dot_product'.")
 
@@ -248,7 +247,7 @@ class IntegralTransform(nn.Module):
                     [batch_size] + [1] * agg_features.ndim
                 )
             agg_features = torch.cat([agg_features, in_features], dim=-1)
-
+        
         rep_features = self.channel_mlp(agg_features)
     
         if f_y is not None and self.transform_type != "nonlinear_kernelonly":
@@ -570,8 +569,8 @@ class GNOEncoder(nn.Module):
         for idx, scale in enumerate(self.scales):
             spatial_nbrs = self.spatial_nbrs_scales[idx]
             encoded = self.gno(
-                y=graph.physical_to_regional.get_ndata()[0],
-                x=graph.physical_to_regional.get_ndata()[1][:, :-1],
+                y=self.input_geom,
+                x=self.latent_queries,
                 f_y=pndata,
                 neighbors=spatial_nbrs
             )
@@ -679,7 +678,6 @@ class GNODecoder(nn.Module):
     def forward(self, graph: RegionInteractionGraph, rndata: torch.Tensor) -> torch.Tensor:
         batch_size = rndata.shape[0]
         device = rndata.device
-
         if self.graph_cache is None:
             self.input_geom = graph.regional_to_physical.src_ndata['pos'].to(device)
             self.latent_queries = graph.regional_to_physical.dst_ndata['pos'].to(device)
@@ -700,8 +698,8 @@ class GNODecoder(nn.Module):
         for idx, scale in enumerate(self.scales):
             spatial_nbrs = self.spatial_nbrs_scales[idx]
             decoded = self.gno(
-                y=graph.regional_to_physical.get_ndata()[0],
-                x=graph.regional_to_physical.get_ndata()[1][:, :-1],
+                y=self.input_geom,
+                x=self.latent_queries,
                 f_y=rndata,
                 neighbors=spatial_nbrs
             )

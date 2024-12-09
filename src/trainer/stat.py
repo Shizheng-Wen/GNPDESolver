@@ -124,7 +124,7 @@ class StaticTrainer(TrainerBase):
             c_val = (c_val - c_mean) / c_std
             c_test = (c_test - c_mean) / c_std
 
-        self.x_train = torch.tensor(self.x_train, dtype=self.dtype).to(self.device) # self.x_train is numpy.array before
+        self.x_train = torch.tensor(self.x_train, dtype=self.dtype)#.to(self.device) # self.x_train is numpy.array before
         
         c_train, u_train = torch.tensor(c_train, dtype=self.dtype), torch.tensor(u_train, dtype=self.dtype)
         c_val, u_val = torch.tensor(c_val, dtype=self.dtype), torch.tensor(u_val, dtype=self.dtype)
