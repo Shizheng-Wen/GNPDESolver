@@ -367,8 +367,8 @@ class GNOEncoder_(nn.Module):
         pndata = self.lifting(pndata).permute(0, 2, 1)  
 
         encoded = self.gno(
-            y=graph.physical_to_regional.get_ndata()[0],
-            x=graph.physical_to_regional.get_ndata()[1][:,:-1],
+            y=graph.physical_to_regional.get_ndata()[0].to(pndata.device),
+            x=graph.physical_to_regional.get_ndata()[1][:,:-1].to(pndata.device),
             f_y=pndata,
             neighbors=self.spatial_nbrs
         ) # [batch_size, num_nodes, channels]
@@ -569,8 +569,8 @@ class GNOEncoder(nn.Module):
         for idx, scale in enumerate(self.scales):
             spatial_nbrs = self.spatial_nbrs_scales[idx]
             encoded = self.gno(
-                y=self.input_geom,
-                x=self.latent_queries,
+                y=graph.physical_to_regional.get_ndata()[0].to(pndata.device),
+                x=graph.physical_to_regional.get_ndata()[1][:,:-1].to(pndata.device),
                 f_y=pndata,
                 neighbors=spatial_nbrs
             )
@@ -593,7 +593,7 @@ class GNOEncoder(nn.Module):
             encoded = encoded_scales[0]
         else:
             if self.use_scale_weights:
-                query_coords = self.latent_queries # [num_query_points, coord_dim]
+                query_coords = graph.physical_to_regional.get_ndata()[1][:,:-1].to(pndata.device) # [num_query_points, coord_dim]
                 scale_weights = self.scale_weighting(query_coords)  # [num_query_points, num_scales]
                 scale_weights = self.scale_weight_activation(scale_weights)  # [num_query_points, num_scales]
                 scale_weights = scale_weights.permute(1, 0)  # [num_scales, num_query_points]
@@ -698,8 +698,8 @@ class GNODecoder(nn.Module):
         for idx, scale in enumerate(self.scales):
             spatial_nbrs = self.spatial_nbrs_scales[idx]
             decoded = self.gno(
-                y=self.input_geom,
-                x=self.latent_queries,
+                y=graph.regional_to_physical.get_ndata()[0].to(device),
+                x=graph.regional_to_physical.get_ndata()[1][:,:-1].to(device),
                 f_y=rndata,
                 neighbors=spatial_nbrs
             )
@@ -723,7 +723,7 @@ class GNODecoder(nn.Module):
             decoded = decoded_scales[0]
         else:
             if self.use_scale_weights:
-                query_coords = self.latent_queries  # [num_query_points, coord_dim]
+                query_coords = graph.regional_to_physical.get_ndata()[1][:,:-1].to(device)  # [num_query_points, coord_dim]
                 scale_weights = self.scale_weighting(query_coords)  # [num_query_points, num_scales]
                 scale_weights = self.scale_weight_activation(scale_weights)  # [num_query_points, num_scales]
 

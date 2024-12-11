@@ -1,0 +1,113 @@
+{
+    "setup": {
+        "seed": 42,
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "trainer_name": "sequential",
+        "train": true,
+        "test": false,
+        "ckpt": false,
+        "use_variance_test": false
+    },
+    "graph": {
+        "periodic": true,
+        "sample_factor": 0.5,
+        "overlap_factor_p2r": 1,
+        "overlap_factor_r2p": 1,
+        "regional_level": 1,
+        "add_dummy_node": false,
+        "with_additional_info": true,
+        "regional_points": [
+            64,
+            64
+        ]
+    },
+    "model": {
+        "name": "lano",
+        "drop_edge": 0.0,
+        "use_conditional_norm": false,
+        "variable_mesh": false,
+        "args": {
+            "gno": {
+                "gno_coord_dim": 2,
+                "projection_channels": 256,
+                "in_gno_channel_mlp_hidden_layers": [
+                    64,
+                    64,
+                    64
+                ],
+                "out_gno_channel_mlp_hidden_layers": [
+                    64,
+                    64
+                ],
+                "lifting_channels": 16,
+                "gno_radius": 0.011,
+                "scales": [2.0, 3.0, 4.0],
+                "use_scale_weights": true,
+                "node_embedding": true,
+                "use_attn": true,
+                "attention_type": "cosine"
+            },
+            "transformer": {
+                "patch_size": 2,
+                "hidden_size": 256,
+                "use_attn_norm": true,
+                "use_ffn_norm": true,
+                "norm_eps": 1e-06,
+                "num_layers": 5,
+                "positional_embedding": "rope",
+                "use_long_range_skip": true,
+                "attn_config": {
+                    "hidden_size": 256,
+                    "num_heads": 8,
+                    "num_kv_heads": 8,
+                    "use_conditional_norm": false,
+                    "cond_norm_hidden_size": 4,
+                    "atten_dropout": 0.2
+                },
+                "ffn_config": {
+                    "hidden_size": 1024,
+                    "use_conditional_norm": false,
+                    "cond_norm_hidden_size": 4
+                }
+            }
+        }
+    },
+    "dataset": {
+        "name": "NS-SL",
+        "metaname": "rigno-unstructured/NS-SL",
+        "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
+        "use_metadata_stats": false,
+        "use_sparse": false,
+        "train_size": 1024,
+        "val_size": 128,
+        "test_size": 256,
+        "max_time_diff": 14,
+        "batch_size": 64,
+        "num_workers": 4,
+        "shuffle": true,
+        "metric": "final_step",
+        "predict_mode": "all",
+        "stepper_mode": "time_der"
+    },
+    "optimizer": {
+        "name": "adamw",
+        "args": {
+            "lr": 0.001,
+            "weight_decay": 1e-05,
+            "epoch": 500,
+            "loss_scale": 1.0,
+            "eval_every_eps": 2,
+            "scheduler": "mix",
+            "max_lr": 0.001,
+            "min_lr": 0.0001,
+            "final_lr": 5e-05
+        }
+    },
+    "path": {
+        "ckpt_path": ".ckpt/lano/fluid_data/multiscale/full/ns_sl.pt",
+        "loss_path": ".loss/lano/fluid_data/multiscale/full/ns_sl.png",
+        "result_path": ".results/lano/fluid_data/multiscale/full/ns_sl.png",
+        "database_path": ".database/lano/fluid_data/multiscale/full/ns_sl.csv"
+    }
+}

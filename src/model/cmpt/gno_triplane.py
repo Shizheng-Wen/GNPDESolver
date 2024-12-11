@@ -398,8 +398,8 @@ class GNOEncoder(nn.Module):
         for idx, scale in enumerate(self.scales):
             spatial_nbrs = spatial_nbrs_scales[idx]
             encoded = self.gno(
-                y=input_coords,
-                x=queries,
+                y=graph.physical_to_regional.get_ndata()[0].to(pndata.device),
+                x=graph.physical_to_regional.get_ndata()[1][:,:-1].to(pndata.device),
                 f_y=pndata,
                 neighbors=spatial_nbrs
             )
@@ -422,6 +422,7 @@ class GNOEncoder(nn.Module):
             encoded = encoded_scales[0]
         else:
             if self.use_scale_weights:
+                # TODO: for node embedding, the queries shouldn't be the coordinates, it should be the node embedding.
                 scale_weights = self.scale_weighting(queries)  # [num_query_points, num_scales]
                 scale_weights = self.scale_weight_activation(scale_weights)  # [num_query_points, num_scales]
                 scale_weights = scale_weights.permute(1, 0)  # [num_scales, num_query_points]
@@ -521,8 +522,8 @@ class GNODecoder(nn.Module):
         for idx, scale in enumerate(self.scales):
             spatial_nbrs = spatial_nbrs_scales[idx]
             decoded = self.gno(
-                y=input_coords,
-                x=queries,
+                y=graph.regional_to_physical.get_ndata()[0].to(device),
+                x=graph.regional_to_physical.get_ndata()[1][:,:-1].to(device),
                 f_y=rndata,
                 neighbors=spatial_nbrs
             )
