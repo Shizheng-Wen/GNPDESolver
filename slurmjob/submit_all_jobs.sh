@@ -32,10 +32,10 @@
 CONFIG_FILES=(
               "gaot/fluid_data/full/multiscale/ce_gauss.json"
               "gaot/fluid_data/full/multiscale/ce_rp.json"
-              "gaot/fluid_data/full/multiscale/ns_gauss.json"
-              "gaot/fluid_data/full/multiscale/ns_pwc.json"
-              "gaot/fluid_data/full/multiscale/ns_sl.json"
-              "gaot/fluid_data/full/multiscale/ns_svs.json"
+              # "gaot/fluid_data/full/multiscale/ns_gauss.json"
+              # "gaot/fluid_data/full/multiscale/ns_pwc.json"
+              # "gaot/fluid_data/full/multiscale/ns_sl.json"
+              # "gaot/fluid_data/full/multiscale/ns_svs.json"
               )
 for CONFIG_FILE in "${CONFIG_FILES[@]}"
 do
