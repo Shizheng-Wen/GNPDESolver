@@ -10,6 +10,7 @@ from .lano import LANO
 from .lano_batch import LANOBATCH
 from .lscot import LSCOT
 from .triplane import Triplane
+from .gaot import GAOT
 
 from .p2r2p import Physical2Regional2Physical
 from ..graph import RegionInteractionGraph
@@ -32,7 +33,8 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
         "lano",
         "lano_batch",
         "lscot",
-        "triplane"
+        "triplane",
+        "gaot"
     ]
 
     assert model.lower() in supported_models, (
@@ -142,6 +144,19 @@ def init_model_from_rigraph(rigraph:RegionInteractionGraph,
             attn_config=config.transformer,
             regional_points=regional_points
         )
+    
+    elif model.lower() == "gaot":
+        return GAOT(
+            input_size=input_size,
+            output_size=output_size,
+            rigraph=rigraph,
+            variable_mesh=variable_mesh,
+            drop_edge=drop_edge,
+            gno_config=config.gno,
+            attn_config=config.transformer,
+            regional_points=regional_points
+        )
+        
     else:
         raise ValueError(f"model {model} not supported currently!")
 

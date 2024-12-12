@@ -30,6 +30,7 @@ class GNOConfig:
     attention_type: str = 'cosine'
     use_geoembed: bool = False
     embedding_method: str = 'statistical'
+    pooling: str = 'max'
 
 
 
@@ -354,7 +355,8 @@ class GNOEncoder(nn.Module):
             self.geoembed = GeometricEmbedding(
                 input_dim=self.coord_dim,
                 output_dim=out_channels,
-                method=gno_config.embedding_method
+                method=gno_config.embedding_method,
+                pooling=gno_config.pooling
             )
             self.recovery = ChannelMLP(
                 in_channels=2 * out_channels,
@@ -480,7 +482,8 @@ class GNODecoder(nn.Module):
             self.geoembed = GeometricEmbedding(
                 input_dim=gno_config.gno_coord_dim,
                 output_dim=in_channels,
-                method=gno_config.embedding_method
+                method=gno_config.embedding_method,
+                pooling=gno_config.pooling
             )
             self.recovery = ChannelMLP(
                 in_channels=2 * in_channels,

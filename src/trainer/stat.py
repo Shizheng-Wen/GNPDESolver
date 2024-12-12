@@ -34,7 +34,6 @@ class StaticTrainer(TrainerBase):
         dataset_name = dataset_config.name
         dataset_path = os.path.join(base_path, f"{dataset_name}.nc")
         self.poseidon_dataset_name = ["Poisson-Gauss"]
-
         with xr.open_dataset(dataset_path) as ds:
             u_array = ds[self.metadata.group_u].values  # Shape: [num_samples, num_timesteps, num_nodes, num_channels]
             if self.metadata.group_c is not None:

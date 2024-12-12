@@ -44,7 +44,7 @@ class GraphConfig:
     regional_level: int = 1
     add_dummy_node: bool = False    
     with_additional_info: bool = True
-    regional_points: tuple = (64, 64)
+    regional_points: Optional[Tuple[int, int]] = (64, 64)
     fix_radius: Optional[float] = None                                      # Whether to use the fix radius for building graph
 
 @dataclass

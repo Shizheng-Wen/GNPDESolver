@@ -44,14 +44,19 @@ class RegionInteractionGraph(nn.Module):
             output_physical_points = rescale(output_points, (-1, 1))
         else:
             output_physical_points = physical_points
-
         if regional_points is None:
             if periodic:
                 _domain_shifts = domain_shifts((2.0,2.0)).to(physical_points.device)
-                regional_points = subsample(physical_points, factor=sample_factor)
+                if sample_factor <= 1.0:
+                    regional_points = subsample(physical_points, factor=sample_factor)
+                else:
+                    regional_points = subsample(physical_points, n=int(sample_factor))
             else:
                 _domain_shifts = None
-                regional_points = subsample(physical_points, factor=sample_factor)
+                if sample_factor <= 1.0:
+                    regional_points = subsample(physical_points, factor=sample_factor)
+                else:
+                    regional_points = subsample(physical_points, n=int(sample_factor))
         else:
             x_min, y_min = phy_domain[0]
             x_max, y_max = phy_domain[1]

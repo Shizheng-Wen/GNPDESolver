@@ -3,12 +3,17 @@ import torch.nn as nn
 from torch_scatter import scatter_mean, scatter_sum, scatter_max
 
 class GeometricEmbedding(nn.Module):
-    def __init__(self, input_dim, output_dim, method='statistical', **kwargs):
+    def __init__(self, input_dim, output_dim, method='statistical', pooling='max', **kwargs):
         super(GeometricEmbedding, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.method = method.lower()
+        self.pooling = pooling.lower()
         self.kwargs = kwargs 
+
+        if self.pooling not in ['max', 'mean']:
+            raise ValueError(f"Unsupported pooling method: {self.pooling}. Supported methods: 'max', 'mean'.")
+
 
         if self.method == 'statistical':
             self.mlp = nn.Sequential(
@@ -176,8 +181,15 @@ class GeometricEmbedding(nn.Module):
 
             nbr_coords_centered = nbr_coords - query_coords_per_neighbor  # [num_total_valid_neighbors, num_dims]
             nbr_features = self.pointnet_mlp(nbr_coords_centered)  # [num_total_valid_neighbors, feature_dim]
-            max_features, _ = scatter_max(nbr_features, query_indices_per_neighbor, dim=0, dim_size=num_queries)
-            pointnet_features = max_features[valid_query_indices]  # [num_valid_queries, feature_dim]
+            
+            if self.pooling == 'max':
+                pooled_features, _ = scatter_max(nbr_features, query_indices_per_neighbor, dim=0, dim_size=num_queries)
+            elif self.pooling == 'mean':
+                pooled_features = scatter_mean(nbr_features, query_indices_per_neighbor, dim=0, dim_size=num_queries)
+            else:
+                raise ValueError(f"Unsupported pooling method: {self.pooling}")
+
+            pointnet_features = pooled_features[valid_query_indices]  # [num_valid_queries, feature_dim]
             pointnet_features = self.fc(pointnet_features)  # [num_valid_queries, output_dim]
 
             geo_features[valid_query_indices] = pointnet_features

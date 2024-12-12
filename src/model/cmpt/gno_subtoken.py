@@ -6,7 +6,7 @@ from .utils.gno_utils import Activation, segment_csr, NeighborSearch
 from .utils.geoembed import GeometricEmbedding
 from .mlp import LinearChannelMLP, ChannelMLP
 from ...graph import RegionInteractionGraph
-
+from ...graph.support import minimal_support
 from dataclasses import dataclass, replace, field
 from typing import Union, Tuple, Optional
 
@@ -380,8 +380,9 @@ class GNOEncoder(nn.Module):
             self.input_geom = graph.physical_to_regional.src_ndata['pos'].to(device)
             self.latent_queries = graph.physical_to_regional.dst_ndata['pos'].to(device)
             self.spatial_nbrs_scales = []
+            radii = minimal_support(self.latent_queries)
             for scale in self.scales:
-                scaled_radius = self.gno_radius * scale
+                scaled_radius = radii * scale
                 spatial_nbrs = self.nb_search(
                     self.input_geom,
                     self.latent_queries,
@@ -513,8 +514,9 @@ class GNODecoder(nn.Module):
             self.input_geom = graph.regional_to_physical.src_ndata['pos'].to(device)
             self.latent_queries = graph.regional_to_physical.dst_ndata['pos'].to(device)
             self.spatial_nbrs_scales = []
+            radii = minimal_support(self.latent_queries)
             for scale in self.scales:
-                scaled_radius = self.gno_radius * scale
+                scaled_radius = radii * scale
                 spatial_nbrs = self.nb_search(
                     self.input_geom,
                     self.latent_queries,

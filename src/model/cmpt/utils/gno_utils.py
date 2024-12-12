@@ -75,7 +75,7 @@ class NeighborSearch(nn.Module):
         
         return return_dict
 
-def native_neighbor_search(data: torch.Tensor, queries: torch.Tensor, radius: float):
+def native_neighbor_search(data: torch.Tensor, queries: torch.Tensor, radius: torch.Tensor):
     """
     Native PyTorch implementation of a neighborhood search
     between two arbitrary coordinate meshes.
@@ -84,14 +84,21 @@ def native_neighbor_search(data: torch.Tensor, queries: torch.Tensor, radius: fl
     -----------
 
     data : torch.Tensor
-        vector of data points from which to find neighbors
+        Vector of data points from which to find neighbors. Shape: (num_data, D)
     queries : torch.Tensor
-        centers of neighborhoods
-    radius : float
-        size of each neighborhood
+        Centers of neighborhoods. Shape: (num_queries, D)
+    radius : torch.Tensor or float
+        Size of each neighborhood. If tensor, should be of shape (num_queries,)
     """
 
     # compute pairwise distances
+    if isinstance(radius, torch.Tensor):
+        if radius.dim() != 1 or radius.size(0) != queries.size(0):
+            raise ValueError("If radius is a tensor, it must be one-dimensional and match the number of queries.")
+        radius = radius.view(-1, 1) 
+    else:
+        radius = torch.tensor(radius, device=queries.device).view(1, 1)
+    
     with torch.no_grad():
         dists = torch.cdist(queries, data).to(queries.device) # shaped num query points x num data points
         in_nbr = torch.where(dists <= radius, 1., 0.) # i,j is one if j is i's neighbor
