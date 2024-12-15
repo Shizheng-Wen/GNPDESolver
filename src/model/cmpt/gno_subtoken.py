@@ -380,7 +380,8 @@ class GNOEncoder(nn.Module):
             self.input_geom = graph.physical_to_regional.src_ndata['pos'].to(device)
             self.latent_queries = graph.physical_to_regional.dst_ndata['pos'].to(device)
             self.spatial_nbrs_scales = []
-            radii = minimal_support(self.latent_queries)
+            #radii = minimal_support(self.latent_queries)
+            radii = self.gno_radius
             for scale in self.scales:
                 scaled_radius = radii * scale
                 spatial_nbrs = self.nb_search(
@@ -514,7 +515,8 @@ class GNODecoder(nn.Module):
             self.input_geom = graph.regional_to_physical.src_ndata['pos'].to(device)
             self.latent_queries = graph.regional_to_physical.dst_ndata['pos'].to(device)
             self.spatial_nbrs_scales = []
-            radii = minimal_support(self.latent_queries)
+            #radii = minimal_support(self.latent_queries)
+            radii = self.gno_radius
             for scale in self.scales:
                 scaled_radius = radii * scale
                 spatial_nbrs = self.nb_search(

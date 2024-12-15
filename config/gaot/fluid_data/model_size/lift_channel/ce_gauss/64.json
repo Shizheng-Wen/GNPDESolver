@@ -1,26 +1,29 @@
 {
     "setup": {
         "seed": 42,
-        "device": "cuda:1",
+        "device": "cuda:0",
         "dtype": "torch.float32",
-        "trainer_name": "static",
-        "train": false,
-        "test": true,
+        "trainer_name": "sequential",
+        "train": true,
+        "test": false,
         "ckpt": false,
         "use_variance_test": false
     },
     "graph": {
-        "periodic": false,
-        "sample_factor": 500,
+        "periodic": true,
+        "sample_factor": 0.5,
         "overlap_factor_p2r": 1,
         "overlap_factor_r2p": 1,
         "regional_level": 1,
         "add_dummy_node": false,
         "with_additional_info": true,
-        "regional_points": null
+        "regional_points": [
+            64,
+            64
+        ]
     },
     "model": {
-        "name": "gaot",
+        "name": "lano",
         "drop_edge": 0.0,
         "use_conditional_norm": false,
         "variable_mesh": false,
@@ -37,12 +40,11 @@
                     64,
                     64
                 ],
-                "lifting_channels": 16,
-                "gno_radius": 0.15,
-                "attention_type": "cosine",
-                "use_geoembed": true,
-                "embedding_method": "pointnet",
-                "pooling": "mean"
+                "lifting_channels": 64,
+                "gno_radius": 0.033,
+                "node_embedding": true,
+                "use_attn": true,
+                "attention_type": "cosine"
             },
             "transformer": {
                 "patch_size": 2,
@@ -50,9 +52,9 @@
                 "use_attn_norm": true,
                 "use_ffn_norm": true,
                 "norm_eps": 1e-06,
-                "num_layers": 3,
+                "num_layers": 5,
                 "positional_embedding": "rope",
-                 "use_long_range_skip": true,
+                "use_long_range_skip": true,
                 "attn_config": {
                     "hidden_size": 256,
                     "num_heads": 8,
@@ -69,37 +71,42 @@
             }
         }
     },
-    
     "dataset": {
-        "name": "elasticity",
-        "metaname": "rigno-unstructured/elasticity",
+        "name": "CE-Gauss",
+        "metaname": "rigno-unstructured/CE-Gauss",
         "base_path": "/cluster/work/math/camlab-data/rigno-unstructured/",
+        "use_metadata_stats": false,
+        "use_sparse": false,
         "train_size": 1024,
         "val_size": 128,
         "test_size": 256,
+        "max_time_diff": 14,
         "batch_size": 64,
         "num_workers": 4,
-        "shuffle": true
+        "shuffle": true,
+        "metric": "final_step",
+        "predict_mode": "all",
+        "stepper_mode": "time_der",
+        "use_time_norm": false
     },
-
     "optimizer": {
         "name": "adamw",
         "args": {
-            "lr": 0.001,
+            "lr": 5e-4,
             "weight_decay": 1e-05,
             "epoch": 500,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
             "scheduler": "mix",
-            "max_lr": 0.001,
-            "min_lr": 0.0001,
-            "final_lr": 5e-05
+            "max_lr": 8e-4,
+            "min_lr": 1e-4,
+            "final_lr": 1e-04
         }
     },
     "path": {
-        "ckpt_path": ".ckpt/gaot/subtoken/static/elasticity.pt",
-        "loss_path": ".loss/gaot/subtoken/static/elasticity.png",
-        "result_path": ".results/gaot/subtoken/static/elasticity.png",
-        "database_path": ".database/gaot/subtoken/static/elasticity.csv"
+        "ckpt_path": ".ckpt/gaot/fluid_data/model_size/lift_channel/ce_gauss/64.pt",
+        "loss_path": ".loss/gaot/fluid_data/model_size/lift_channel/ce_gauss/64.png",
+        "result_path": ".results/gaot/fluid_data/model_size/lift_channel/ce_gauss/64.png",
+        "database_path": ".database/gaot/fluid_data/model_size/lift_channel/ce_gauss/64.csv"
     }
 }
