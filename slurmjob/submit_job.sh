@@ -7,7 +7,7 @@
 #SBATCH --gpus=rtx_4090:1                   # 请求1个GPU
 
 # 切换到执行目录
-cd /cluster/scratch/shiwen/GNPDESolver
+cd /cluster/work/math/shiwen/GNPDESolver
 
 # 激活虚拟环境
 source ~/venvs/neuralop/bin/activate

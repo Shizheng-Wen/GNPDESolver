@@ -11,13 +11,13 @@
 **__pycache__**
 
 slurmjob/**
-!slurmjob/*.sh
+#!slurmjob/*.sh
 
 
 config/*
 !config/tpl/
 !config/tpl/**
-!config/gaot/
+#!config/gaot/
 
 
 tests/preprocess/*

@@ -8,7 +8,7 @@
 #SBATCH --output=gen_data.out
 #SBATCH --error=gen_data.err
 
-cd /cluster/scratch/shiwen/GNPDESolver/tests
+cd /cluster/work/math/shiwen/GNPDESolver/tests
 
 source ~/venvs/neuralop/bin/activate
 
