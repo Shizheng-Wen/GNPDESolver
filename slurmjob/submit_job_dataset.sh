@@ -5,11 +5,11 @@
 #SBATCH --mem-per-cpu=8000                # memory for every core
 #SBATCH --mail-type=END,FAIL              # 当作业结束或失败时发送邮件
 #SBATCH --mail-user=shiwen@student.ethz.ch  # 将此替换为您的邮箱地址
-#SBATCH --output=gen_data.out
-#SBATCH --error=gen_data.err
+#SBATCH --output=data/gen_data.out
+#SBATCH --error=data/gen_data.err
 
-cd /cluster/work/math/shiwen/GNPDESolver/tests
+cd /cluster/work/math/shiwen/GNPDESolver/tests/preprocess
 
 source ~/venvs/neuralop/bin/activate
 
-python gen_data.py
+python naca_proprecess.py
