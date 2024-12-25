@@ -2,46 +2,27 @@
 
 # list of config files
 CONFIG_FILES=(
-              # "gaot/static/poisson_c_sines.json"
-              # "gaot/abla/data_size/poisson_c_sines/256.json"
-              # "gaot/abla/data_size/poisson_c_sines/512.json"
-              # "gaot/abla/data_size/poisson_c_sines/1024.json"
+              "gaot/abla/multiscale/heat_l_sines.json"
+              "gaot/abla/multiscale/wave_c_sines.json"
+              "gaot/abla/data_size/ce_gauss/128.json"
+              "gaot/abla/data_size/ce_gauss/256.json"
+              "gaot/abla/data_size/ce_gauss/512.json"
+      
+              "gaot/abla/data_size/ce_rp/128.json"
+              "gaot/abla/data_size/ce_rp/256.json"
+              "gaot/abla/data_size/ce_rp/512.json"
 
-              # "gaot/abla/data_size/airfoil_grid/128.json"
-              # "gaot/abla/data_size/airfoil_grid/256.json"
-              # "gaot/abla/data_size/airfoil_grid/512.json"
-              # "gaot/abla/data_size/airfoil_grid/1024.json"
+              "gaot/abla/data_size/ns_pwc/128.json"
+              "gaot/abla/data_size/ns_pwc/256.json"
+              "gaot/abla/data_size/ns_pwc/512.json"
 
-              # "gaot/abla/data_size/poisson_gauss/128.json"
-              # "gaot/abla/data_size/poisson_gauss/256.json"
-              # "gaot/abla/data_size/poisson_gauss/512.json"
-              # "gaot/abla/data_size/poisson_gauss/1024.json"
+              "gaot/abla/data_size/ns_sl/128.json"
+              "gaot/abla/data_size/ns_sl/256.json"
+              "gaot/abla/data_size/ns_sl/512.json"
 
-              # "gaot/abla/data_size/ns_gauss/128.json"
-              # "gaot/abla/data_size/ns_gauss/256.json"
-              # "gaot/abla/data_size/ns_gauss/512.json"
-
-              "gaot/abla/data_size/ce_crp/128.json"
-              "gaot/abla/data_size/ce_crp/256.json"
-              "gaot/abla/data_size/ce_crp/512.json"
-              "gaot/abla/data_size/ce_crp/1024.json"
-
-              "gaot/abla/data_size/ce_kh/128.json"
-              "gaot/abla/data_size/ce_kh/256.json"
-              "gaot/abla/data_size/ce_kh/512.json"
-              "gaot/abla/data_size/ce_kh/1024.json"
-
-              "gaot/abla/data_size/ce_rpui/128.json"
-              "gaot/abla/data_size/ce_rpui/256.json"
-              "gaot/abla/data_size/ce_rpui/512.json"
-              "gaot/abla/data_size/ce_rpui/1024.json"
-
-              "gaot/abla/data_size/ns_sines/128.json"
-              "gaot/abla/data_size/ns_sines/256.json"
-              "gaot/abla/data_size/ns_sines/512.json"
-              "gaot/abla/data_size/ns_sines/1024.json"
-
-
+              "gaot/abla/data_size/ns_svs/128.json"
+              "gaot/abla/data_size/ns_svs/256.json"
+              "gaot/abla/data_size/ns_svs/512.json"
               )
 for CONFIG_FILE in "${CONFIG_FILES[@]}"
 do

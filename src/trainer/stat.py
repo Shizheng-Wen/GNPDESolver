@@ -239,9 +239,7 @@ class StaticTrainer_unstructured(StaticTrainer):
         self.poseidon_dataset_name = ["Poisson-Gauss"]
 
         with xr.open_dataset(dataset_path) as ds:
-            # Load u as NumPy array
             u_array = ds[self.metadata.group_u].values  # Shape: [num_samples, num_timesteps, num_nodes, num_channels]
-            # Load c if available
             if self.metadata.group_c is not None:
                 c_array = ds[self.metadata.group_c].values  # Shape: [num_samples, num_timesteps, num_nodes, num_channels_c]
             else:

@@ -1,3 +1,6 @@
+1. "gaot/abla/geoemb/pointnet/poisson_c_sines.json"一直不work，不知道原因
+
+
 **Ongoing experiments:**
 - [x] `config_lano_ce_gauss_learnrate.json`的实验继续，因为之前的模型并没有收敛，所以继续进行学习，看一下继续学习能否进一步优化模型。
     - 进一步优化感觉也没什么用，学习率基本上收敛不下降了。
