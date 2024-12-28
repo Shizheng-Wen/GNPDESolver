@@ -245,30 +245,20 @@ class StaticTrainer_unstructured(StaticTrainer):
             else:
                 c_array = None
             # Load x
-            if self.metadata.group_x is not None:
+            if self.metadata.group_x is not None and self.metadata.fix_x == False:
                 x_array = ds[self.metadata.group_x].values
                 if x_array.shape[0] == u_array.shape[0]:
                    x_array = x_array
-                   self.coord = x_array
+                   self.x_train = x_array    # [num_samples, num_timesteps, num_nodes, num_dims]
             else:
-                domain_x = self.metadata.domain_x #([xmin, ymin], [xmax, ymax])
-                nx, ny = u_array.shape[-2], u_array.shape[-1]
-                x_lin = np.linspace(domain_x[0][0], domain_x[1][0], nx)
-                y_lin = np.linspace(domain_x[0][1], domain_x[1][1], ny)
-                xv, yv = np.meshgrid(x_lin, y_lin, indexing='ij')
-                x_grid = np.stack([xv, yv], axis=-1)  # [nx, ny, num_dims]
-                x_grid = x_grid.reshape(-1, 2)  # [num_nodes, num_dims]
-                x_grid = x_grid[None, None, ...]  # Add sample and time dimensions
-                self.x_train = x_grid # store the x array for later use
-                c_array = c_array.reshape(c_array.shape[0],-1)[:,None,:,None] # [num_samples, 1, num_nodes, 1]
-                u_array = u_array.reshape(u_array.shape[0],-1)[:,None,:,None] # [num_samples, 1, num_nodes, 1]
+                raise ValueError("fix_x must be False for unstructured data")
                 
 
         if dataset_name in self.poseidon_dataset_name and dataset_config.use_sparse:
             u_array = u_array[:,:,:9216,:]
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
-            x_array = self.x_array[:,:,:9216,:]
+            self.x_train = self.x_train[:,:,:9216,:]
        
         active_vars = self.metadata.active_variables
         u_array = u_array[..., active_vars]
@@ -296,6 +286,9 @@ class StaticTrainer_unstructured(StaticTrainer):
         u_train = u_array[train_indices]
         u_val = u_array[val_indices]
         u_test = u_array[test_indices]
+        x_train = self.x_train[train_indices]
+        x_val = self.x_train[val_indices]
+        x_test = self.x_train[test_indices]
 
         if c_array is not None:
             c_train = c_array[train_indices]
@@ -309,26 +302,19 @@ class StaticTrainer_unstructured(StaticTrainer):
         u_train_flat = u_train.reshape(-1, u_train.shape[-1])
         u_mean = np.mean(u_train_flat, axis=0)
         u_std = np.std(u_train_flat, axis=0) + EPSILON  # Avoid division by zero
-
-        # Store statistics as torch tensors
         self.u_mean = torch.tensor(u_mean, dtype=self.dtype)
         self.u_std = torch.tensor(u_std, dtype=self.dtype)
-
-        # Normalize data using NumPy operations
+        # Normalize the data
         u_train = (u_train - u_mean) / u_std
         u_val = (u_val - u_mean) / u_std
         u_test = (u_test - u_mean) / u_std
-
         # If c is used, compute statistics and normalize c
         if c_array is not None:
             c_train_flat = c_train.reshape(-1, c_train.shape[-1])
             c_mean = np.mean(c_train_flat, axis=0)
             c_std = np.std(c_train_flat, axis=0) + EPSILON  # Avoid division by zero
-
-            # Store statistics
             self.c_mean = torch.tensor(c_mean, dtype=self.dtype)
             self.c_std = torch.tensor(c_std, dtype=self.dtype)
-
             # Normalize c
             c_train = (c_train - c_mean) / c_std
             c_val = (c_val - c_mean) / c_std
@@ -348,7 +334,7 @@ class StaticTrainer_unstructured(StaticTrainer):
         self.test_loader = DataLoader(test_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
 
     def init_graph(self, graph_config):
-        self.rigraph = RegionInteractionGraph.from_point_cloud(points = torch.tensor(self.coord[0][0],dtype=self.dtype),
+        self.rigraph = RegionInteractionGraph.from_point_cloud(points = torch.tensor(self.x_train[0][0],dtype=self.dtype),
                                               phy_domain=self.metadata.domain_x,
                                               **shallow_asdict(graph_config)
                                             )
@@ -402,9 +388,9 @@ class StaticTrainer_unstructured(StaticTrainer):
         all_relative_errors = torch.cat(all_relative_errors, dim=0)
         final_metric = compute_final_metric(all_relative_errors)
         self.config.datarow["relative error (direct)"] = final_metric
+        print(f"relative error: {final_metric}")
 
         x_plot = x_sample * self.c_std.to(self.device)  
-        
         self.plot_results(coords = coord_sample[0], input = x_sample[0], gt = y_sample_de_norm[0], pred = pred_de_norm[0])
 
 class StaticTrainer_test(StaticTrainer):

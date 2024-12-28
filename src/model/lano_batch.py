@@ -52,7 +52,15 @@ class LANOBATCH(Physical2Regional2Physical):
         # Initialize the Vision Transformer processor
         self.patch_linear = nn.Linear(self.patch_size * self.patch_size * self.node_latent_size,
                                       self.patch_size * self.patch_size * self.node_latent_size)
-        self.register_buffer('positional_embeddings', self.get_positional_embeddings())
+    
+        self.positional_embedding_name = config.positional_embedding
+        self.positions = self.get_patch_positions()
+        if self.positional_embedding_name == 'absolute':
+            pos_emb = self.compute_absolute_embeddings(self.positions, self.patch_size * self.patch_size * self.node_latent_size)
+            self.register_buffer('positional_embeddings', pos_emb)
+
+        setattr(config.attn_config, 'H', self.H)
+        setattr(config.attn_config, 'W', self.W)
 
         return Transformer(
             input_size=self.node_latent_size * self.patch_size * self.patch_size,
@@ -103,18 +111,25 @@ class LANOBATCH(Physical2Regional2Physical):
         num_patches_H = H // P
         num_patches_W = W // P
         num_patches = num_patches_H * num_patches_W
-
         # Reshape to patches
         rndata = rndata.view(batch_size, H, W, C)
         rndata = rndata.view(batch_size, num_patches_H, P, num_patches_W, P, C)
         rndata = rndata.permute(0, 1, 3, 2, 4, 5).contiguous()
         rndata = rndata.view(batch_size, num_patches_H * num_patches_W, P * P * C)
-
+        
         # Apply Vision Transformer
         rndata = self.patch_linear(rndata)
-        pos_emb = self.positional_embeddings.unsqueeze(0)
-        rndata = rndata + pos_emb
-        rndata = self.processor(rndata, condition=condition)
+        pos = self.positions.to(rndata.device)  # shape [num_patches, 2]
+
+        if self.positional_embedding_name == 'absolute':
+            pos_emb = self.compute_absolute_embeddings(pos, self.patch_size * self.patch_size * self.node_latent_size)
+            rndata = rndata + pos_emb
+            relative_positions = None
+    
+        elif self.positional_embedding_name == 'rope':
+            relative_positions = pos
+
+        rndata = self.processor(rndata, condition=condition, relative_positions=relative_positions)
 
         # Reshape back to the original shape
         rndata = rndata.view(batch_size, num_patches_H, num_patches_W, P, P, C)
@@ -153,23 +168,18 @@ class LANOBATCH(Physical2Regional2Physical):
         torch.Tensor
             The output tensor of shape [batch_size, n_physical_nodes, output_size]
         """
-        if self.batch_latent_queries == None:
-            batch_size = pndata.shape[0]
-            latent_queries = graphs.physical_to_regional.dst_ndata['pos'].to(pndata.device)
-            self.batch_latent_queries = latent_queries.unsqueeze(0).repeat(batch_size, 1, 1)
-    
         # Encode: Map physical nodes to regional nodes using GNO Encoder
-        rndata = self.encode(xcoord, self.batch_latent_queries, pndata)
+        rndata = self.encode(graphs, pndata, xcoord)
 
         # Process: Apply Vision Transformer on the regional nodes
         rndata = self.process(graphs.regional_to_regional, rndata, condition)
 
         # Decode: Map regional nodes back to physical nodes using GNO Decoder
-        output = self.decode(self.batch_latent_queries, xcoord, rndata)
+        output = self.decode(graphs, rndata, xcoord)
 
         return output
 
-    def get_positional_embeddings(self):
+    def get_patch_positions(self):
         """
         Generate positional embeddings for the patches.
         """
@@ -180,10 +190,10 @@ class LANOBATCH(Physical2Regional2Physical):
             torch.arange(num_patches_W, dtype=torch.float32),
             indexing='ij'
         ), dim=-1).reshape(-1, 2)
-        pos_emb = self.compute_rope_embeddings(positions, self.patch_size * self.patch_size * self.node_latent_size)
-        return pos_emb
 
-    def compute_rope_embeddings(self, positions, embed_dim):
+        return positions
+
+    def compute_absolute_embeddings(self, positions, embed_dim):
         """
         Compute RoPE embeddings for the given positions.
         """
