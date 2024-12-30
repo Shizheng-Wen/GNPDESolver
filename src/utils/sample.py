@@ -4,20 +4,28 @@ from typing import Optional
 
 def subsample(points:torch.Tensor, 
               n:Optional[int] = None, 
-              factor:Optional[float] = None)->torch.Tensor:
+              factor:Optional[float] = None,
+              seed:Optional[int] = None)->torch.Tensor:
     """
+    Subsamples the input tensor either by selecting a fixed number of samples (n)
+    or by a subsampling factor.
+
     Parameters
     ----------
-    points: torch.Tensor
-        ND tensor
-    n: Optional[int]
-        number of samples  
-    factor: Optional[float]
-        factor of subsampling, should be in the range (0, 1]
+    points : torch.Tensor
+        ND tensor containing the points to be subsampled.
+    n : Optional[int]
+        Number of samples to select. Must be in the range (0, points.shape[0]].
+    factor : Optional[float]
+        Factor of subsampling, should be in the range (0, 1].
+    seed : Optional[int]
+        Seed for the random number generator to ensure reproducibility. 
+        If not provided, a deterministic seed based on points, n, and factor is used.
+
     Returns
     -------
-    sampled_points: torch.Tensor
-        1D tensor
+    torch.Tensor
+        1D tensor containing the subsampled points.
     """
     assert n is None or (n > 0 and n <= points.shape[0]), "The number of samples should be in the range (0, n_values]"
     assert factor is None or factor <= 1 and factor > 0, "The factor should be in the range (0, 1]"
@@ -25,7 +33,12 @@ def subsample(points:torch.Tensor,
         raise ValueError("Either n or factor should be provided")
     if factor is not None:
         n = int(points.shape[0] * factor)
-    idx = torch.randperm(points.shape[0])[:n]
+    
+    if seed is None:
+        seed = hash((points.sum().item(), n, factor)) % (2**32)
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    idx = torch.randperm(points.shape[0], generator=generator)[:n]
     return points[idx]
 
 def grid(points:torch.Tensor, 

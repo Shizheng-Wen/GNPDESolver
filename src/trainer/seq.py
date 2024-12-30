@@ -14,7 +14,9 @@ from .utils import (manual_seed, DynamicPairDataset, TestDataset,
                     compute_batch_errors, compute_final_metric)
 from .utils.io_norm import compute_stats
 from .utils.data_pairs import CombinedDataLoader
+from .utils.plot import plot_estimates
 from ..utils import shallow_asdict
+
 
 from src.data.dataset import Metadata, DATASET_METADATA
 from src.graph import RegionInteractionGraph
@@ -432,7 +434,7 @@ class SequentialTrainer(TrainerBase):
                     
                     y_batch_de_norm = y_batch
                     pred_de_norm = pred
-
+                    
                     if self.dataset_config.metric == "final_step":
                         relative_errors = compute_batch_errors(
                             y_batch_de_norm[:,-1,:,:][:,None,:,:], 
@@ -449,7 +451,10 @@ class SequentialTrainer(TrainerBase):
                     pbar.update(1)
                     # Store example data for plotting (only once)
                     if example_data is None:
+                        u_in_dim = self.stats["u"]["std"].shape[0]
+                        x_batch_input = x_batch[...,:u_in_dim].cpu().numpy() * self.stats["u"]["std"] + self.stats["u"]["mean"]
                         example_data = {
+                            'input': x_batch_input[0],
                             'coords': self.x_train[0, 0].cpu().numpy(),
                             'gt_sequence': y_batch_de_norm[0].cpu().numpy(),
                             'pred_sequence': pred_de_norm[0].cpu().numpy(),
@@ -472,29 +477,39 @@ class SequentialTrainer(TrainerBase):
             self.config.datarow[f"relative error ({mode})"] = errors_dict[mode]
 
         if example_data is not None:
-            self.plot_results(
-                coords=example_data['coords'],
-                gt_sequence=example_data['gt_sequence'],
-                pred_sequence=example_data['pred_sequence'],
-                time_indices=example_data['time_indices'],
-                t_values=example_data['t_values'],
-                num_frames=5
+            fig = plot_estimates(
+                u_inp = example_data['input'],
+                u_gtr = example_data['gt_sequence'][-1],
+                u_prd = example_data['pred_sequence'][-1],
+                x_inp = example_data['coords'],
+                x_out = example_data['coords'],
+                names = self.metadata.names['u'],
+                symmetric = self.metadata.signed['u'],
+                domain = self.metadata.domain_x
             )
+            
+            fig.savefig(self.path_config.result_path,dpi=300,bbox_inches="tight", pad_inches=0.1)
+            plt.close(fig)
         
         if self.setup_config.measure_inf_time:
             self.measure_inference_time()
 
-    def plot_results(self, coords, gt_sequence, pred_sequence, time_indices, t_values, num_frames=5):
+    def plot_results(self, coords, input, gt_sequence, pred_sequence, time_indices, t_values,num_frames=5):
         """
         Plots several frames of ground truth and predicted results using contour plots for all variables.
 
         Args:
-            coords (numpy.ndarray): Coordinates of the nodes. Shape: [num_nodes, num_dims]
-            gt_sequence (numpy.ndarray): Ground truth sequence. Shape: [num_timesteps, num_nodes, num_vars]
-            pred_sequence (numpy.ndarray): Predicted sequence. Shape: [num_timesteps, num_nodes, num_vars]
+            coords (numpy.ndarray): Coordinates of the nodes. Shape: [num_nodes, num_dims].
+            input  (numpy.ndarray): input for the model. Shape: [num_nodes, num_input_channels]
+            gt_sequence (numpy.ndarray): Ground truth sequence. Shape: [num_timesteps, num_nodes, num_vars].
+            pred_sequence (numpy.ndarray): Predicted sequence. Shape: [num_timesteps, num_nodes, num_vars].
             time_indices (np.ndarray): Array of time indices used in the prediction.
             t_values (np.ndarray): Actual time values corresponding to the time indices.
             num_frames (int): Number of frames to plot. Defaults to 5.
+
+        Saves:
+            A plot in the specified results directory, with the file name dynamically including the dataset name.
+            For example: ".results/lano/fd/wave_parallel_<dataset_name>.png".
         """
         num_timesteps = gt_sequence.shape[0]
         num_nodes = coords.shape[0]
@@ -528,7 +543,7 @@ class SequentialTrainer(TrainerBase):
             vmin = vmin_list[variable_idx]
             vmax = vmax_list[variable_idx]
             for i, frame_idx in enumerate(frame_indices):
-                time_idx = time_indices[frame_idx + 1]  # +1 because gt_sequence and pred_sequence start from time_indices[1:]
+                time_idx = time_indices[frame_idx]  # +1 because gt_sequence and pred_sequence start from time_indices[1:]
                 time_value = t_values[time_idx]
 
                 gt = gt_sequence[frame_idx][:, variable_idx]

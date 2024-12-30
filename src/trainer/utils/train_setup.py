@@ -63,6 +63,7 @@ def load_ckpt(path, **kwargs):
             [model, optimizer, scheduler]
     """
     ckpt = torch.load(path)
+
     for k, v in kwargs.items():
         state_dict = ckpt[k]
         model_keys = v.state_dict().keys()
@@ -81,5 +82,5 @@ def load_ckpt(path, **kwargs):
                 new_state_dict[new_key] = state_dict[key]
             state_dict = new_state_dict
 
-        v.load_state_dict(state_dict)
+        v.load_state_dict(state_dict, strict=False)
     return [i for i in kwargs.values()]

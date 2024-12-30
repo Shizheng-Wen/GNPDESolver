@@ -253,13 +253,13 @@ class StaticTrainer_unstructured(StaticTrainer):
             else:
                 raise ValueError("fix_x must be False for unstructured data")
                 
-
+        
         if dataset_name in self.poseidon_dataset_name and dataset_config.use_sparse:
             u_array = u_array[:,:,:9216,:]
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
             self.x_train = self.x_train[:,:,:9216,:]
-       
+
         active_vars = self.metadata.active_variables
         u_array = u_array[..., active_vars]
         self.num_input_channels = c_array.shape[-1]
@@ -267,9 +267,9 @@ class StaticTrainer_unstructured(StaticTrainer):
 
         # Compute dataset sizes
         total_samples = u_array.shape[0]
-        train_size = dataset_config["train_size"]
-        val_size = dataset_config["val_size"]
-        test_size = dataset_config["test_size"]
+        train_size = dataset_config.train_size
+        val_size = dataset_config.val_size
+        test_size = dataset_config.test_size
         assert train_size + val_size + test_size <= total_samples, "Sum of train, val, and test sizes exceeds total samples"
         assert u_array.shape[1] == 1, "Expected num_timesteps to be 1 for static datasets."
     
@@ -329,9 +329,9 @@ class StaticTrainer_unstructured(StaticTrainer):
         val_ds = TensorDataset(c_val, u_val, x_val)
         test_ds = TensorDataset(c_test, u_test, x_test)
 
-        self.train_loader = DataLoader(train_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
-        self.val_loader = DataLoader(val_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
-        self.test_loader = DataLoader(test_ds, batch_size=dataset_config["batch_size"], shuffle=dataset_config["shuffle"], num_workers=dataset_config["num_workers"])
+        self.train_loader = DataLoader(train_ds, batch_size=dataset_config.batch_size, shuffle=dataset_config.shuffle, num_workers=dataset_config.num_workers)
+        self.val_loader = DataLoader(val_ds, batch_size=dataset_config.batch_size, shuffle=dataset_config.shuffle, num_workers=dataset_config.num_workers)
+        self.test_loader = DataLoader(test_ds, batch_size=dataset_config.batch_size, shuffle=dataset_config.shuffle, num_workers=dataset_config.num_workers)
 
     def init_graph(self, graph_config):
         self.rigraph = RegionInteractionGraph.from_point_cloud(points = torch.tensor(self.x_train[0][0],dtype=self.dtype),

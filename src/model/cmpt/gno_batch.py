@@ -7,10 +7,13 @@ import numpy as np
 
 from .mlp import LinearChannelMLP, ChannelMLP
 from ...utils.scale import rescale
+from ...utils.sample import subsample
 
 from .utils.gno_utils import Activation, segment_csr, NeighborSearch
 from .utils.geoembed import GeometricEmbedding
+
 from ...graph import RegionInteractionGraph
+from ...graph.support import minimal_support
 
 from .gno import IntegralTransform
 
@@ -21,7 +24,8 @@ This code is beta version, the final version will be integrated into the gno.py
 I have droped the NeighborSearch_batch and IntegralTransformBatch. Because it is not a big 
 for loop, we can use loop to reduce the peak of memory usage.
 """
-
+SUBTOKEN = False
+N_TOKEN = 1000
 ##########
 # GNOEncoder
 ##########
@@ -93,22 +97,20 @@ class GNOEncoder(nn.Module):
         """
         x = rescale(x_coord)
         device = pndata.device
-
         latent_queries = graph.physical_to_regional.dst_ndata['pos'].to(device)
         pndata = pndata.permute(0,2,1)
         pndata = self.lifting(pndata).permute(0,2,1)
 
         n_batch, n, d = x_coord.shape
         m = latent_queries.shape[1]
-        
 
         encoded = []
         for b in range(n_batch):
             x_b = x[b] # Shape: [n, d]
             pndata_b = pndata[b] # Shape: [n, n_channels]
-
+            if SUBTOKEN:
+                latent_queries = subsample(x_b, n = N_TOKEN)
             encoded_scales = []
-
             for scale in self.scales:
                 scaled_radius = self.gno_radius * scale
                 spatial_nbrs = self.nb_search(x_b, latent_queries, scaled_radius)
@@ -226,8 +228,9 @@ class GNODecoder(nn.Module):
         decoded = []
         for b in range(n_batch):
             latent_queries_b = latent_queries[b] # Shape: [m, d]
+            if SUBTOKEN:
+                x = subsample(latent_queries_b, n = N_TOKEN)
             rndata_b = rndata[b] # Shape: [n, n_channels]
-
             decoded_scales = []
             for scale in self.scales:
                 scaled_radius = self.gno_radius * scale

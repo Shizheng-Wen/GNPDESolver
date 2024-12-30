@@ -34,7 +34,6 @@ class LANOBATCH(Physical2Regional2Physical):
         self.H = regional_points[0]
         self.W = regional_points[1]
 
-        self.batch_latent_queries = None
 
         # Initialize encoder, processor, and decoder
         self.encoder = self.init_encoder(input_size, rigraph, gno_config)
@@ -68,6 +67,14 @@ class LANOBATCH(Physical2Regional2Physical):
             config=config
         )
     
+    def init_processor_gaot(self, node_latent_size, config):
+        
+        return Transformer(
+            input_size=self.node_latent_size,
+            output_size=self.node_latent_size,
+            config=config
+        )
+
     def init_decoder(self, output_size, rigraph, variable_mesh, gno_config):
         # Initialize the GNO decoder
         return GNODecoder(
@@ -135,6 +142,34 @@ class LANOBATCH(Physical2Regional2Physical):
         rndata = rndata.view(batch_size, num_patches_H, num_patches_W, P, P, C)
         rndata = rndata.permute(0, 1, 3, 2, 4, 5).contiguous()
         rndata = rndata.view(batch_size, H * W, C)
+
+        return rndata
+
+    def process_gaot(self, graph: Graph,
+                rndata: Optional[torch.Tensor] = None,
+                condition: Optional[float] = None
+                ) -> torch.Tensor:
+        """
+        Parameters
+        ----------
+        graph:Graph
+            regional to regional graph, a homogeneous graph
+        rndata:Optional[torch.Tensor]
+            ND Tensor of shape [..., n_regional_nodes, node_latent_size]
+        condition:Optional[float]
+            The condition of the model
+        
+        Returns
+        -------
+        torch.Tensor
+            The regional node data of shape [..., n_regional_nodes, node_latent_size]
+        """
+        batch_size = rndata.shape[0]
+        n_regional_nodes = rndata.shape[1]
+        C = rndata.shape[2]        
+
+        relative_positions = None
+        rndata = self.processor(rndata, condition=condition, relative_positions=relative_positions)
 
         return rndata
 
