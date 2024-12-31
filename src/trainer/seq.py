@@ -452,12 +452,18 @@ class SequentialTrainer(TrainerBase):
                     # Store example data for plotting (only once)
                     if example_data is None:
                         u_in_dim = self.stats["u"]["std"].shape[0]
-                        x_batch_input = x_batch[...,:u_in_dim].cpu().numpy() * self.stats["u"]["std"] + self.stats["u"]["mean"]
+                        if "c" in self.stats:
+                            c_in_dim = self.stats["c"]["std"].shape[0]
+                            x_batch_input_u = x_batch[...,:u_in_dim].cpu().numpy() * self.stats["u"]["std"] + self.stats["u"]["mean"]
+                            x_batch_input_c = x_batch[...,u_in_dim:u_in_dim + c_in_dim].cpu().numpy() * self.stats["c"]["std"] + self.stats["c"]["mean"]
+                            x_batch_input = np.stack([x_batch_input_u,x_batch_input_c], axis=-1)
+                        else:
+                            x_batch_input = x_batch[...,:u_in_dim].cpu().numpy() * self.stats["u"]["std"] + self.stats["u"]["mean"]
                         example_data = {
-                            'input': x_batch_input[0],
+                            'input': x_batch_input[-1],
                             'coords': self.x_train[0, 0].cpu().numpy(),
-                            'gt_sequence': y_batch_de_norm[0].cpu().numpy(),
-                            'pred_sequence': pred_de_norm[0].cpu().numpy(),
+                            'gt_sequence': y_batch_de_norm[-1].cpu().numpy(),
+                            'pred_sequence': pred_de_norm[-1].cpu().numpy(),
                             'time_indices': time_indices,
                             't_values': self.test_dataset.t_values
                         }
@@ -477,16 +483,29 @@ class SequentialTrainer(TrainerBase):
             self.config.datarow[f"relative error ({mode})"] = errors_dict[mode]
 
         if example_data is not None:
-            fig = plot_estimates(
-                u_inp = example_data['input'],
-                u_gtr = example_data['gt_sequence'][-1],
-                u_prd = example_data['pred_sequence'][-1],
-                x_inp = example_data['coords'],
-                x_out = example_data['coords'],
-                names = self.metadata.names['u'],
-                symmetric = self.metadata.signed['u'],
-                domain = self.metadata.domain_x
-            )
+            if self.metadata.names['c']:
+                fig = plot_estimates(
+                    u_inp = example_data['input'].squeeze(1),
+                    u_gtr = np.stack([example_data['gt_sequence'][-1],example_data['input'][...,-1]],axis=-1).squeeze(1),
+                    u_prd = np.stack([example_data['pred_sequence'][-1],example_data['input'][...,-1]],axis=-1).squeeze(1),
+                    x_inp = example_data['coords'],
+                    x_out = example_data['coords'],
+                    names = self.metadata.names['u'] + self.metadata.names['c'],
+                    symmetric = self.metadata.signed['u'] + self.metadata.signed['c'],
+                    domain = self.metadata.domain_x
+                )
+            
+            else:
+                fig = plot_estimates(
+                    u_inp = example_data['input'],
+                    u_gtr = example_data['gt_sequence'][-1],
+                    u_prd = example_data['pred_sequence'][-1],
+                    x_inp = example_data['coords'],
+                    x_out = example_data['coords'],
+                    names = self.metadata.names['u'],
+                    symmetric = self.metadata.signed['u'],
+                    domain = self.metadata.domain_x
+                )
             
             fig.savefig(self.path_config.result_path,dpi=300,bbox_inches="tight", pad_inches=0.1)
             plt.close(fig)

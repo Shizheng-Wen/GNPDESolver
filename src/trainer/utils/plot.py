@@ -15,6 +15,16 @@ C_BLACK_REDDISH = '#380801'
 C_WHITE_BLUEISH = '#dce5f5'
 C_WHITE_REDDISH = '#f5dcdc'
 
+# bright ones
+C_BRIGHT_PURPLE = '#7f00ff'   # 亮紫
+C_BRIGHT_PINK   = '#ff00ff'   # 玫红
+C_BRIGHT_ORANGE = '#ff7700'   # 橙
+C_BRIGHT_YELLOW = '#ffdd00'   # 黄
+C_BRIGHT_GREEN  = '#00ee00'   # 亮绿
+C_BRIGHT_CYAN   = '#00ffff'   # 青
+C_BRIGHT_BLUE   = '#0f00ff'   # 亮蓝
+
+
 CMAP_BBR = matplotlib.colors.LinearSegmentedColormap.from_list(
   'blue_black_red',
   [C_WHITE_BLUEISH, C_BLUE, C_BLACK, C_RED, C_WHITE_REDDISH],
@@ -31,12 +41,37 @@ CMAP_WRB = matplotlib.colors.LinearSegmentedColormap.from_list(
   N=200,
 )
 
+CMAP_BRIGHT_SYMM = matplotlib.colors.LinearSegmentedColormap.from_list(
+    'bright_symm',
+    [
+        '#1f00ff',  # 亮蓝
+        '#ffffff',  # 白色
+        '#ff005f',  # 亮红/粉
+    ],
+    N=256,
+)
+CMAP_BRIGHT_SINGLE = matplotlib.colors.LinearSegmentedColormap.from_list(
+    'bright_single',
+    [
+        '#ffe5ee',  # 更柔和的浅粉 (类似 web 色 'MistyRose')
+        '#ff77aa',  # 中间的粉红/玫红
+        '#ff0050',  # 亮红，与 symm colormap 的红统一
+    ],
+    N=256,
+)
+
 plt.rcParams['font.family'] = 'serif'
 
 plt.rcParams['font.family'] = 'serif'
 SCATTER_SETTINGS = dict(marker='s', s=1, alpha=1, linewidth=0)
 HATCH_SETTINGS = dict(facecolor='#b8b8b8', hatch='//////', edgecolor='#4f4f4f', linewidth=.0)
 
+BACKGROUND_SETTINGS_BRIGHT = dict(
+    facecolor='#ffe5ee',  # 浅粉，与亮色 colormap 呼应
+    alpha=0.3,            # 半透明度，可视情况调整或移除
+    edgecolor='none',     # 不绘制边框
+    linewidth=0.0,        # 如无需边框，可设为 0
+)
 def plot_trajectory(u, x, t, idx_t, idx_s=0, symmetric=True, ylabels=None, domain=([0, 0], [1, 1])):
 
   _WIDTH_PER_COL = 1.5
