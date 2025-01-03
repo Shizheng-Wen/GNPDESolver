@@ -260,6 +260,8 @@ class StaticTrainer_unstructured(StaticTrainer):
                 c_array = c_array[:,:,:9216,:]
             self.x_train = self.x_train[:,:,:9216,:]
 
+        c_array = np.concatenate((c_array,self.x_train), axis = -1)
+        
         active_vars = self.metadata.active_variables
         u_array = u_array[..., active_vars]
         self.num_input_channels = c_array.shape[-1]

@@ -114,9 +114,9 @@
     },
 
     "path": {
-        "ckpt_path": ".ckpt/lano/fd/finetune/wave_layer/fd_128.pt",
-        "loss_path": ".loss/lano/fd/finetune/wave_layer/fd_128.png",
-        "result_path": ".results/lano/fd/finetune/wave_layer/fd_128.png",
-        "database_path": ".database/lano/fd/finetune/wave_layer/fd_128.csv"
+        "ckpt_path": ".ckpt/gaot/fd/finetune/wave_layer/fd_128.pt",
+        "loss_path": ".loss/gaot/fd/finetune/wave_layer/fd_128.png",
+        "result_path": ".results/gaot/fd/finetune/wave_layer/fd_128.png",
+        "database_path": ".database/gaot/fd/finetune/wave_layer/fd_128.csv"
     }
 }

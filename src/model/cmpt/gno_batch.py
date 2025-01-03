@@ -100,10 +100,10 @@ class GNOEncoder(nn.Module):
         latent_queries = graph.physical_to_regional.dst_ndata['pos'].to(device)
         pndata = pndata.permute(0,2,1)
         pndata = self.lifting(pndata).permute(0,2,1)
-
+        
         n_batch, n, d = x_coord.shape
         m = latent_queries.shape[1]
-
+        radii = minimal_support(latent_queries)
         encoded = []
         for b in range(n_batch):
             x_b = x[b] # Shape: [n, d]
@@ -112,8 +112,9 @@ class GNOEncoder(nn.Module):
                 latent_queries = subsample(x_b, n = N_TOKEN)
             encoded_scales = []
             for scale in self.scales:
-                scaled_radius = self.gno_radius * scale
-                spatial_nbrs = self.nb_search(x_b, latent_queries, scaled_radius)
+                scaled_radius = radii * scale
+                with torch.no_grad():
+                    spatial_nbrs = self.nb_search(x_b, latent_queries, scaled_radius)
                 encoded_unpatched = self.gno(
                     y = x_b,
                     x = latent_queries,
@@ -127,9 +128,9 @@ class GNOEncoder(nn.Module):
                         latent_queries,
                         spatial_nbrs
                     ) # Shape: [n, d]
-
-                    encoded_unpatched = torch.cat([encoded_unpatched, geoembedding], dim=-1)
-                    encoded_unpatched = self.recovery(encoded_unpatched)
+                    encoded_unpatched = torch.cat([encoded_unpatched, geoembedding], dim=-1).unsqueeze(0)
+                    encoded_unpatched = encoded_unpatched.permute(0, 2, 1)
+                    encoded_unpatched = self.recovery(encoded_unpatched).permute(0, 2, 1).squeeze(0)
                 encoded_scales.append(encoded_unpatched)
             
             if len(encoded_scales) == 1:
@@ -141,7 +142,6 @@ class GNOEncoder(nn.Module):
                     encoded_data = torch.stack(encoded_scales, 0).sum(dim=0)
             
             encoded.append(encoded_data)
-        
         encoded = torch.stack(encoded, 0) # Shape: [n_batch, m, n_channels]
         return encoded
 
@@ -224,7 +224,7 @@ class GNODecoder(nn.Module):
         
 
         n_batch, n, d = latent_queries.shape
-
+        
         decoded = []
         for b in range(n_batch):
             latent_queries_b = latent_queries[b] # Shape: [m, d]
@@ -232,9 +232,11 @@ class GNODecoder(nn.Module):
                 x = subsample(latent_queries_b, n = N_TOKEN)
             rndata_b = rndata[b] # Shape: [n, n_channels]
             decoded_scales = []
+            radii = minimal_support(latent_queries_b)
             for scale in self.scales:
-                scaled_radius = self.gno_radius * scale
-                spatial_nbrs = self.nb_search(x, latent_queries_b, scaled_radius)
+                scaled_radius = radii * scale
+                with torch.no_grad():
+                    spatial_nbrs = self.nb_search(x, latent_queries_b, scaled_radius)
                 decoded_unpatched = self.gno(
                     y = x,
                     x = latent_queries_b,
@@ -248,9 +250,9 @@ class GNODecoder(nn.Module):
                         latent_queries_b,
                         spatial_nbrs
                     )
-
-                    decoded_unpatched = torch.cat([decoded_unpatched, geoembedding], dim=-1)
-                    decoded_unpatched = self.recovery(decoded_unpatched)
+                    decoded_unpatched = torch.cat([decoded_unpatched, geoembedding], dim=-1).unsqueeze(0)
+                    decoded_unpatched = decoded_unpatched.permute(0, 2, 1)
+                    decoded_unpatched = self.recovery(decoded_unpatched).permute(0, 2, 1).squeeze(0)
                 decoded_scales.append(decoded_unpatched)
             
             if len(decoded_scales) == 1:

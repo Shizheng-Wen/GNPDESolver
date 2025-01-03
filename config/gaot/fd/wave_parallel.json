@@ -115,9 +115,9 @@
     },
 
     "path": {
-        "ckpt_path": ".ckpt/lano/fd/wave_parallel.pt",
-        "loss_path": ".loss/lano/fd/wave_parallel.png",
-        "result_path": ".results/lano/fd/wave_parallel.png",
-        "database_path": ".database/lano/fd/wave_parallel.csv"
+        "ckpt_path": ".ckpt/gaot/fd/wave_parallel.pt",
+        "loss_path": ".loss/gaot/fd/wave_parallel.png",
+        "result_path": ".results/gaot/fd/wave_parallel.png",
+        "database_path": ".database/gaot/fd/wave_parallel.csv"
     }
 }

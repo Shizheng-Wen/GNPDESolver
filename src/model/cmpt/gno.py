@@ -248,8 +248,8 @@ class IntegralTransform(nn.Module):
                     [batch_size] + [1] * agg_features.ndim
                 )
             agg_features = torch.cat([agg_features, in_features], dim=-1)
-        
-        rep_features = self.channel_mlp(agg_features)
+
+        rep_features = self.channel_mlp(agg_features) # TODOz:这一步累计的计算图巨大[280468]
     
         if f_y is not None and self.transform_type != "nonlinear_kernelonly":
             rep_features = rep_features * in_features
