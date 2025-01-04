@@ -4,8 +4,8 @@
         "device": "cuda:0",
         "dtype": "torch.float32",
         "trainer_name": "sequential",
-        "train": true,
-        "test": false,
+        "train": false,
+        "test": true,
         "ckpt": false,
         "use_variance_test": false
     },
@@ -87,7 +87,7 @@
         "num_workers": 4,
         "shuffle": true,
         "metric": "final_step",
-        "predict_mode": "all",
+        "predict_mode": "autoregressive",
         "stepper_mode": "time_der"
     },
     "optimizer": {

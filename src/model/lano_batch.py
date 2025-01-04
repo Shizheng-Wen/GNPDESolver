@@ -47,7 +47,7 @@ class LANOBATCH(Physical2Regional2Physical):
             gno_config = gno_config
         )
     
-    def init_processor_lano(self, node_latent_size, config):
+    def init_processor(self, node_latent_size, config):
         # Initialize the Vision Transformer processor
         self.patch_linear = nn.Linear(self.patch_size * self.patch_size * self.node_latent_size,
                                       self.patch_size * self.patch_size * self.node_latent_size)
@@ -67,7 +67,7 @@ class LANOBATCH(Physical2Regional2Physical):
             config=config
         )
     
-    def init_processor(self, node_latent_size, config):
+    def init_processor_gaot(self, node_latent_size, config):
         
         return Transformer(
             input_size=self.node_latent_size,
@@ -88,7 +88,7 @@ class LANOBATCH(Physical2Regional2Physical):
         encoded = self.encoder(x, latent_queries, pndata)
         return encoded
 
-    def process_lano(self, graph: Graph,
+    def process(self, graph: Graph,
                 rndata: Optional[torch.Tensor] = None,
                 condition: Optional[float] = None
                 ) -> torch.Tensor:
@@ -145,7 +145,7 @@ class LANOBATCH(Physical2Regional2Physical):
 
         return rndata
 
-    def process(self, graph: Graph,
+    def process_gaot(self, graph: Graph,
                 rndata: Optional[torch.Tensor] = None,
                 condition: Optional[float] = None
                 ) -> torch.Tensor:

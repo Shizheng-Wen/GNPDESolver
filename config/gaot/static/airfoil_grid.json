@@ -4,9 +4,9 @@
         "device": "cuda:0",
         "dtype": "torch.float32",
         "trainer_name": "static",
-        "train": true,
-        "test": false,
-        "ckpt": true,
+        "train": false,
+        "test": true,
+        "ckpt": false,
         "use_variance_test": false
     },
     "graph": {

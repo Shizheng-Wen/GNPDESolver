@@ -105,9 +105,9 @@
         }
     },
     "path": {
-        "ckpt_path": ".ckpt/lano/fluid_data/multiscale/full/ns_svs.pt",
-        "loss_path": ".loss/lano/fluid_data/multiscale/full/ns_svs.png",
-        "result_path": ".results/lano/fluid_data/multiscale/full/ns_svs.png",
-        "database_path": ".database/lano/fluid_data/multiscale/full/ns_svs.csv"
+        "ckpt_path": ".ckpt/gaot/fluid_data/full/multiscale/ns_svs.pt",
+        "loss_path": ".loss/gaot/fluid_data/full/multiscale/ns_svs.png",
+        "result_path": ".results/gaot/fluid_data/full/multiscale/ns_svs.png",
+        "database_path": ".database/gaot/fluid_data/full/multiscale/ns_svs.csv"
     }
 }

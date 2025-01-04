@@ -4,8 +4,8 @@
         "device": "cuda:0",
         "dtype": "torch.float32",
         "trainer_name": "sequential",
-        "train": true,
-        "test": false,
+        "train": false,
+        "test": true,
         "ckpt": false,
         "use_variance_test": false
     },
@@ -87,7 +87,7 @@
         "num_workers": 4,
         "shuffle": true,
         "metric": "final_step",
-        "predict_mode": "all",
+        "predict_mode": "autoregressive",
         "stepper_mode": "time_der"
     },
     "optimizer": {
@@ -105,9 +105,9 @@
         }
     },
     "path": {
-        "ckpt_path": ".ckpt/lano/fluid_data/multiscale/full/ns_sl.pt",
-        "loss_path": ".loss/lano/fluid_data/multiscale/full/ns_sl.png",
-        "result_path": ".results/lano/fluid_data/multiscale/full/ns_sl.png",
-        "database_path": ".database/lano/fluid_data/multiscale/full/ns_sl.csv"
+        "ckpt_path": ".ckpt/gaot/fluid_data/full/multiscale/ns_sl.pt",
+        "loss_path": ".loss/gaot/fluid_data/full/multiscale/ns_sl.png",
+        "result_path": ".results/gaot/fluid_data/full/multiscale/ns_sl.png",
+        "database_path": ".database/gaot/fluid_data/full/multiscale/ns_sl.csv"
     }
 }

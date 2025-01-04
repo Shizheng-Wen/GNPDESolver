@@ -103,7 +103,7 @@ class GNOEncoder(nn.Module):
         
         n_batch, n, d = x_coord.shape
         m = latent_queries.shape[1]
-        radii = minimal_support(latent_queries)
+        #radii = minimal_support(latent_queries)
         encoded = []
         for b in range(n_batch):
             x_b = x[b] # Shape: [n, d]
@@ -112,7 +112,8 @@ class GNOEncoder(nn.Module):
                 latent_queries = subsample(x_b, n = N_TOKEN)
             encoded_scales = []
             for scale in self.scales:
-                scaled_radius = radii * scale
+                #scaled_radius = radii * scale
+                scaled_radius = self.gno_radius * scale
                 with torch.no_grad():
                     spatial_nbrs = self.nb_search(x_b, latent_queries, scaled_radius)
                 encoded_unpatched = self.gno(
@@ -232,9 +233,10 @@ class GNODecoder(nn.Module):
                 x = subsample(latent_queries_b, n = N_TOKEN)
             rndata_b = rndata[b] # Shape: [n, n_channels]
             decoded_scales = []
-            radii = minimal_support(latent_queries_b)
+            #radii = minimal_support(latent_queries_b)
             for scale in self.scales:
-                scaled_radius = radii * scale
+                scaled_radius = self.gno_radius * scale
+                #scaled_radius = radii * scale
                 with torch.no_grad():
                     spatial_nbrs = self.nb_search(x, latent_queries_b, scaled_radius)
                 decoded_unpatched = self.gno(

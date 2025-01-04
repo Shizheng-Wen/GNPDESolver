@@ -64,7 +64,8 @@ plt.rcParams['font.family'] = 'serif'
 
 plt.rcParams['font.family'] = 'serif'
 SCATTER_SETTINGS = dict(marker='s', s=1, alpha=1, linewidth=0)
-HATCH_SETTINGS = dict(facecolor='#b8b8b8', hatch='//////', edgecolor='#4f4f4f', linewidth=.0)
+#HATCH_SETTINGS = dict(facecolor='#b8b8b8', hatch='//////', edgecolor='#4f4f4f', linewidth=.0)
+HATCH_SETTINGS = dict(facecolor='#b8b8b8', edgecolor='#4f4f4f', linewidth=.0)
 
 BACKGROUND_SETTINGS_BRIGHT = dict(
     facecolor='#ffe5ee',  # 浅粉，与亮色 colormap 呼应

@@ -13,6 +13,7 @@ from omegaconf import OmegaConf
 
 from .base import TrainerBase
 from .utils import manual_seed, compute_batch_errors, compute_final_metric
+from .utils.plot import plot_estimates
 from ..utils import shallow_asdict
 
 from src.data.dataset import Metadata, DATASET_METADATA
@@ -42,6 +43,7 @@ class StaticTrainer(TrainerBase):
                 c_array = None
             if self.metadata.group_x is not None:
                 x_array = ds[self.metadata.group_x].values
+                self.all_coord = x_array
                 if x_array.shape[0] == u_array.shape[0]:
                    x_array = x_array[0:1] # TODO: x_array is not constant across samples dimension.
                 self.x_train = x_array
@@ -55,6 +57,7 @@ class StaticTrainer(TrainerBase):
                 x_grid = x_grid.reshape(-1, 2)  # [num_nodes, num_dims]
                 x_grid = x_grid[None, None, ...]  # Add sample and time dimensions
                 self.x_train = x_grid 
+                self.all_coord = x_grid
                 c_array = c_array.reshape(c_array.shape[0],-1)[:,None,:,None] # [num_samples, 1, num_nodes, 1]
                 u_array = u_array.reshape(u_array.shape[0],-1)[:,None,:,None] # [num_samples, 1, num_nodes, 1]
                 
@@ -175,8 +178,20 @@ class StaticTrainer(TrainerBase):
         print(f"relative error: {final_metric}")
 
         x_plot = x_sample * self.c_std.to(self.device)  
-        self.plot_results(self.rigraph.physical_to_regional.src_ndata['pos'], x_sample[0], y_sample_de_norm[0], pred_de_norm[0])
-        
+
+        fig = plot_estimates(
+            u_inp = x_sample[-1].cpu().numpy(), 
+            u_gtr = y_sample_de_norm[-1].cpu().numpy(), 
+            u_prd = pred_de_norm[-1].cpu().numpy(), 
+            x_inp = self.all_coord[-1][0],
+            x_out = self.all_coord[-1][0],
+            names = self.metadata.names['u'],
+            symmetric = self.metadata.signed['u'],
+            domain = self.metadata.domain_x)
+
+        fig.savefig(self.path_config.result_path,dpi=300,bbox_inches="tight", pad_inches=0.1)
+        plt.close(fig)
+
     def plot_results(self, coords, input, gt, pred):
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
 
@@ -260,7 +275,7 @@ class StaticTrainer_unstructured(StaticTrainer):
                 c_array = c_array[:,:,:9216,:]
             self.x_train = self.x_train[:,:,:9216,:]
 
-        c_array = np.concatenate((c_array,self.x_train), axis = -1)
+        #c_array = np.concatenate((c_array,self.x_train), axis = -1)
         
         active_vars = self.metadata.active_variables
         u_array = u_array[..., active_vars]
@@ -393,7 +408,20 @@ class StaticTrainer_unstructured(StaticTrainer):
         print(f"relative error: {final_metric}")
 
         x_plot = x_sample * self.c_std.to(self.device)  
-        self.plot_results(coords = coord_sample[0], input = x_sample[0], gt = y_sample_de_norm[0], pred = pred_de_norm[0])
+
+        fig = plot_estimates(
+            u_inp = x_sample[-1].cpu().numpy(), 
+            u_gtr = y_sample_de_norm[-1].cpu().numpy(), 
+            u_prd = pred_de_norm[-1].cpu().numpy(), 
+            x_inp = coord_sample[0].cpu().numpy(),
+            x_out = coord_sample[0].cpu().numpy(),
+            names = self.metadata.names['u'],
+            symmetric = self.metadata.signed['u'],
+            domain = self.metadata.domain_x)
+
+        fig.savefig(self.path_config.result_path,dpi=300,bbox_inches="tight", pad_inches=0.1)
+        plt.close(fig)
+
 
 class StaticTrainer_test(StaticTrainer):
     """

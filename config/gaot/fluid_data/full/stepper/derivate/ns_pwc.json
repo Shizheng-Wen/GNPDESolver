@@ -85,7 +85,7 @@
         "num_workers": 4,
         "shuffle": true,
         "metric": "final_step",
-        "predict_mode": "all",
+        "predict_mode": "autoregressive",
         "stepper_mode": "time_der"
     },
     "optimizer": {
