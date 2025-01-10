@@ -27,6 +27,8 @@ class SetUpConfig:
     ckpt: bool = False
     use_variance_test: bool = False                                         # TODO needs to develop.
     measure_inf_time: bool = False                                          # TODO needs to be examined
+    visualize_encoder_output: bool = False
+    vis_component: str = "encoder"
     # Parameters for distributed mode
     distributed: bool = False
     world_size: int = 1

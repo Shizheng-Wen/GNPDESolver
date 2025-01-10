@@ -7,7 +7,9 @@
         "train": false,
         "test": true,
         "ckpt": false,
-        "use_variance_test": false
+        "use_variance_test": false,
+        "visualize_encoder_output": true,
+        "vis_component": "encoder"
     },
     "graph": {
         "periodic": false,
@@ -77,7 +79,7 @@
         "val_size": 128,
         "test_size": 256,
         "batch_size": 64,
-        "num_workers": 4,
+        "num_workers": 1,
         "shuffle": true
     },
     "optimizer": {

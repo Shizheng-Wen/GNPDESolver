@@ -13,7 +13,7 @@ from omegaconf import OmegaConf
 
 from .base import TrainerBase
 from .utils import manual_seed, compute_batch_errors, compute_final_metric
-from .utils.plot import plot_estimates
+from .utils.plot import plot_estimates, visualize_encoder_output
 from ..utils import shallow_asdict
 
 from src.data.dataset import Metadata, DATASET_METADATA
@@ -67,6 +67,7 @@ class StaticTrainer(TrainerBase):
             if c_array is not None:
                 c_array = c_array[:,:,:9216,:]
             self.x_train = self.x_train[:,:,:9216,:]
+            self.all_coord = self.all_coord[:,:,:9216,:]
        
         active_vars = self.metadata.active_variables
         u_array = u_array[..., active_vars]
@@ -167,6 +168,21 @@ class StaticTrainer(TrainerBase):
             for i, (x_sample, y_sample) in enumerate(self.test_loader):
                 x_sample, y_sample = x_sample.to(self.device), y_sample.to(self.device) # Shape: [batch_size, num_timesteps, num_nodes, num_channels]
                 x_sample, y_sample = x_sample.squeeze(1), y_sample.squeeze(1)
+                
+                if i == 0 and self.setup_config.visualize_encoder_output:
+                    vis_component = self.setup_config.vis_component # [Encoder or Processor]
+                    fig = visualize_encoder_output(
+                        model =self.model,
+                        rigraph=self.rigraph,
+                        pndata=x_sample,
+                        vis_compt = vis_component,
+                        channel_in=0,   # 哪个通道可视化 Input
+                        domain=[[-1, -1], [1, 1]]
+                    )
+                    # 例如把图片保存到路径:
+                    plt.savefig(self.path_config.result_path + f"_{vis_component}_features.png", dpi=300,bbox_inches="tight", pad_inches=0.1)
+                    plt.close(fig)
+                
                 pred = self.model(self.rigraph, x_sample)
                 pred_de_norm = pred * self.u_std.to(self.device) + self.u_mean.to(self.device)
                 y_sample_de_norm = y_sample * self.u_std.to(self.device) + self.u_mean.to(self.device)

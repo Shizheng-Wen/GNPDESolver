@@ -5,6 +5,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from typing import Optional, Tuple, Union, List
+import torch
+from sklearn.decomposition import PCA
+
+
+from ...data.dataset import Metadata
+from .cal_metric import compute_batch_errors, compute_final_metric
 
 C_BLACK = '#000000'
 C_WHITE = '#ffffff'
@@ -391,3 +397,235 @@ def plot_estimates(
         ax.xaxis.set_tick_params(labelsize=8)
 
     return fig
+
+  
+def plot_error_vs_time(u_gtr: torch.Tensor,
+                      u_prd: torch.Tensor,
+                      t_values: np.array, 
+                      t_indices:np.array, 
+                      metadata: Metadata):
+  """
+    u_gtr: [num_of_samples, num_time_steps, num_of_points, num_channels]
+    u_prd: [num_of_samples, num_time_steps, num_of_points, num_channels]
+  """
+  time_steps = u_prd.shape[1]
+  errors = []
+  for t in range(time_steps):
+    u_gtr_t = u_gtr[:,t:t+1]
+    u_prd_t = u_prd[:,t:t+1]
+
+    error_t = compute_batch_errors(u_gtr_t, u_prd_t, metadata)
+    error_t = compute_final_metric(error_t)
+    errors.append(error_t)
+  print(errors)
+  print(t_values[t_indices])
+  
+  
+  fig, ax = plt.subplots(figsize=(8, 6))
+  ax.plot(range(time_steps), errors, marker='o', label='Relative Error')
+  ax.set_xlabel('Time Step')
+  ax.set_ylabel('Relative Error')
+  ax.set_title('Error vs Time Step')
+  ax.legend()
+  ax.grid(True)
+  fig.savefig("test.jpg")
+  return fig
+
+def visualize_encoder_output(
+    model: torch.nn.Module,
+    rigraph,
+    pndata: torch.Tensor,
+    vis_compt: str = "encoder",
+    channel_in: int = 0,
+    domain: Tuple[List[float], List[float]] = ([0, 0], [1, 1])
+) -> plt.Figure:
+    """
+    Visualizes the encoder output in a 4-column layout, matching the
+    plotting style of 'plot_estimates' except for the actual content:
+
+      1) Input (a single channel),
+      2) First principal component (PC1),
+      3) Second principal component (PC2),
+      4) Scatter of PC1 vs. PC2 (no colorbar).
+
+    Each of the first three columns has a horizontal colorbar with
+    symmetric color limits (like in plot_estimates). The overall figure
+    size, hatch fill, color scheme, and dynamic scatter sizing also
+    replicate the plot_estimates aesthetic.
+
+    Parameters
+    ----------
+    model: torch.nn.Module
+        The whole (or similar) neural operator.
+    rigraph : RegionInteractionGraph
+        Graph object that has physical_to_regional.dst_ndata['pos'] as 2D coordinates.
+    pndata : torch.Tensor
+        Input data of shape [batch_size, n_nodes, in_channels].
+        Only the first batch (index=0) is visualized.
+    vis_compt: str, optional
+        Which part of output you want to visualize.
+    channel_in : int, optional
+        Which input channel to visualize in the first column. Defaults to 0.
+    domain : tuple of list, optional
+        The displayed region as ([x_min, y_min], [x_max, y_max]).
+        A hatched rectangle is drawn in each subplot to fill this domain,
+        mirroring the style from plot_estimates.
+
+    Returns
+    -------
+    fig : plt.Figure
+        A Matplotlib Figure with 2 row-grids:
+          - row 0 : four scatter subplots (Input, PC1, PC2, PC1 vs. PC2)
+          - row 1 : four horizontal colorbars (the last one hidden)
+        The rest of the styling (size, font, color scale) follows plot_estimates.
+
+    Notes
+    -----
+    - We run encoder(...) under torch.no_grad() to obtain the latent representation
+      of shape [B, n_nodes, latent_dim]. Then apply PCA(n_components=2) to the
+      first batch's latent features for the second/third/fourth columns.
+    - The first column's coloring uses pndata[0, :, channel_in], also plotted
+      with a symmetrical color scale about zero, as in plot_estimates.
+    - The scatter sizing is adapted from plot_estimates, scaling by the number
+      of points to keep a roughly consistent density for different node counts.
+    """
+
+    # ~~~ 1) Forward pass + PCA ~~~
+    model.eval()
+    with torch.no_grad():
+        if vis_compt == "encoder":
+          encoded = model.encoder(rigraph, pndata)  # => [batch_size, n_nodes, latent_dim]
+        if vis_compt == "processor":
+          encoded = model.encoder(rigraph, pndata) 
+          encoded = model.process(rigraph.regional_to_regional, encoded)
+    # Only visualize batch=0
+    encoded_0 = encoded[0]  # [n_nodes, latent_dim]
+    # 2D node positions
+    pos = rigraph.physical_to_regional.dst_ndata['pos'][:, :2].cpu().numpy()  # shape [n_nodes, 2]
+    phy_pos = rigraph.physical_to_regional.src_ndata['pos'].cpu().numpy()
+
+    # Input channel data
+    inp_data = pndata[0, :, channel_in].cpu().numpy()  # [n_nodes]
+
+    # PCA => 2 components
+    encoded_0_np = encoded_0.cpu().numpy()
+    pca = PCA(n_components=2)
+    enc_pca = pca.fit_transform(encoded_0_np)  # => [n_nodes, 2]
+    pc1, pc2 = enc_pca[:, 0], enc_pca[:, 1]
+
+    # ~~~ 2) Create figure & Subplots ~~~
+    #   - replicate the size logic from plot_estimates
+    _HEIGHT_PER_ROW = 1.9
+    _HEIGHT_MARGIN = 0.2
+    _SCATTER_SETTINGS_INPUT = SCATTER_SETTINGS.copy()
+    _SCATTER_SETTINGS_PCA = SCATTER_SETTINGS.copy()
+    # dynamic sizing, as in plot_estimates (see the example)
+    n_points = phy_pos.shape[0]
+    _SCATTER_SETTINGS_INPUT['s'] = _SCATTER_SETTINGS_INPUT['s'] * 0.4 * _HEIGHT_PER_ROW
+    _SCATTER_SETTINGS_INPUT['s'] = _SCATTER_SETTINGS_INPUT['s'] * 128 / (n_points ** 0.5)
+
+    n_points = pos.shape[0]
+    _SCATTER_SETTINGS_PCA['s'] = _SCATTER_SETTINGS_PCA['s'] * 0.8 * _HEIGHT_PER_ROW
+    _SCATTER_SETTINGS_PCA['s'] = _SCATTER_SETTINGS_PCA['s'] * 128 / (n_points ** 0.5)
+
+    figsize = (8.6, _HEIGHT_PER_ROW + _HEIGHT_MARGIN)
+    fig = plt.figure(figsize=figsize)
+    g_fig = fig.add_gridspec(
+        nrows=1,
+        ncols=1,
+        wspace=0.0,
+        hspace=0.0
+    )
+    subfig = fig.add_subfigure(g_fig[0, 0], frameon=False)
+
+    # Sub-gridspec (2 rows x 4 columns): row0=4 plots, row1=4 colorbars
+    g = subfig.add_gridspec(
+        nrows=2,
+        ncols=4,
+        height_ratios=[1, 0.05],
+        wspace=0.20,
+        hspace=0.05
+    )
+    ax_inp  = subfig.add_subplot(g[0, 0])
+    ax_pc1  = subfig.add_subplot(g[0, 1])
+    ax_pc2  = subfig.add_subplot(g[0, 2])
+    ax_pcs  = subfig.add_subplot(g[0, 3])
+
+    cb_inp  = subfig.add_subplot(g[1, 0])
+    cb_pc1  = subfig.add_subplot(g[1, 1])
+    cb_pc2  = subfig.add_subplot(g[1, 2])
+    cb_pcs  = subfig.add_subplot(g[1, 3])  # hidden later
+
+    # ~~~ 3) Shared domain fill & axis style ~~~
+    for ax in [ax_inp, ax_pc1, ax_pc2, ]:
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlim(domain[0][0], domain[1][0])
+        ax.set_ylim(domain[0][1], domain[1][1])
+        ax.fill_between(
+            x=[domain[0][0], domain[1][0]],
+            y1=domain[0][1],
+            y2=domain[1][1],
+            **HATCH_SETTINGS
+        )
+    ax_pcs.set_xticks([])
+    ax_pcs.set_yticks([])
+
+    # ~~~ 4) Column 1: Input data ~~~
+    inp_vmax = float(np.max(inp_data))
+    inp_vmin = float(np.min(inp_data))
+    abs_vmax_inp = max(abs(inp_vmax), abs(inp_vmin))
+
+    sc = ax_inp.scatter(
+        phy_pos[:, 0], phy_pos[:, 1],
+        c=inp_data,
+        cmap=CMAP_BWR,
+        vmin=-abs_vmax_inp,
+        vmax=+abs_vmax_inp,
+        **_SCATTER_SETTINGS_INPUT
+    )
+    cb = plt.colorbar(sc, cax=cb_inp, orientation='horizontal')
+    cb.formatter.set_powerlimits((-0, 0))
+    ax_inp.set_title("Input")
+
+    # ~~~ 5) Column 2: PC1 ~~~
+    pc1_vmax = float(pc1.max())
+    pc1_vmin = float(pc1.min())
+    abs_vmax_pc1 = max(abs(pc1_vmax), abs(pc1_vmin))
+
+    sc = ax_pc1.scatter(
+        pos[:, 0], pos[:, 1],
+        c=pc1,
+        cmap=CMAP_BWR,
+        vmin=-abs_vmax_pc1,
+        vmax=+abs_vmax_pc1,
+        **_SCATTER_SETTINGS_PCA
+    )
+    cb = plt.colorbar(sc, cax=cb_pc1, orientation='horizontal')
+    cb.formatter.set_powerlimits((-0, 0))
+    ax_pc1.set_title("PCA1")
+
+    # ~~~ 6) Column 3: PC2 ~~~
+    pc2_vmax = float(pc2.max())
+    pc2_vmin = float(pc2.min())
+    abs_vmax_pc2 = max(abs(pc2_vmax), abs(pc2_vmin))
+
+    sc = ax_pc2.scatter(
+        pos[:, 0], pos[:, 1],
+        c=pc2,
+        cmap=CMAP_BWR,
+        vmin=-abs_vmax_pc2,
+        vmax=+abs_vmax_pc2,
+        **_SCATTER_SETTINGS_PCA
+    )
+    cb = plt.colorbar(sc, cax=cb_pc2, orientation='horizontal')
+    cb.formatter.set_powerlimits((-0, 0))
+    ax_pc2.set_title("PCA2")
+
+    # ~~~ 7) Column 4: (PC1, PC2) scatter, no colorbar ~~~
+    ax_pcs.scatter(pc1, pc2, c='b', **_SCATTER_SETTINGS_PCA)
+    ax_pcs.set_title("PCA1 vs. PCA2")
+    cb_pcs.set_visible(False)
+
+    return fig
+

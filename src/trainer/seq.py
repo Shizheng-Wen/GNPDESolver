@@ -14,7 +14,7 @@ from .utils import (manual_seed, DynamicPairDataset, TestDataset,
                     compute_batch_errors, compute_final_metric)
 from .utils.io_norm import compute_stats
 from .utils.data_pairs import CombinedDataLoader
-from .utils.plot import plot_estimates
+from .utils.plot import plot_estimates, plot_error_vs_time, visualize_encoder_output
 from ..utils import shallow_asdict
 
 
@@ -324,6 +324,19 @@ class SequentialTrainer(TrainerBase):
             
             # Forward pass
             with torch.no_grad():
+                if idx == 1 and self.setup_config.visualize_encoder_output:
+                    vis_component = self.setup_config.vis_component # [Encoder or Processor]
+                    fig = visualize_encoder_output(
+                        model =self.model,
+                        rigraph=self.rigraph,
+                        pndata=x_input,
+                        vis_compt = vis_component,
+                        channel_in=0,   # 哪个通道可视化 Input
+                        domain=[[-1, -1], [1, 1]]
+                    )
+                    plt.savefig(self.path_config.result_path + f"_{vis_component}_features.png", dpi=300,bbox_inches="tight", pad_inches=0.1)
+                    plt.close(fig)
+    
                 if self.model_config.use_conditional_norm:
                     pred = self.model(self.rigraph, x_input[...,:-1], x_input[...,0,-2:-1])
                 else:
@@ -434,7 +447,7 @@ class SequentialTrainer(TrainerBase):
                     
                     y_batch_de_norm = y_batch
                     pred_de_norm = pred
-                    
+
                     if self.dataset_config.metric == "final_step":
                         relative_errors = compute_batch_errors(
                             y_batch_de_norm[:,-1,:,:][:,None,:,:], 
@@ -671,7 +684,7 @@ class FoundationModelTrainer(TrainerBase):
         base_path  = dataset_config.base_path
         dataset_names = dataset_config.names
         metadata_names = dataset_config.metanames
-
+        
         self.datasets = {}
         self.dataloaders = {}
         self.rigraphs = {}
@@ -683,7 +696,7 @@ class FoundationModelTrainer(TrainerBase):
             dataset_path = os.path.join(base_path, f"{dataset_name}.nc")
             metadata = DATASET_METADATA[metadata_name]
             self.metadata_dict[dataset_name] = metadata
-
+            
             with xr.open_dataset(dataset_path) as ds:
                 u_array = ds[metadata.group_u].values
                 if metadata.group_c is not None:
@@ -693,6 +706,7 @@ class FoundationModelTrainer(TrainerBase):
                 if metadata.group_x is not None:
                     x_array = ds[metadata.group_x].values
                     x_train = x_array
+                    self.coord = x_train
                 else:
                     domain_x = metadata.domain_x
                     nx, ny = u_array.shape[2], u_array.shape[3]
@@ -704,7 +718,7 @@ class FoundationModelTrainer(TrainerBase):
                     x_grid = x_grid[None, None, ...]
                     x_train = x_grid
             
-            if dataset_name == "wave_c_sines":
+            if dataset_name == "wave_c_sines" or dataset_name == "wave_l_sines":
                 c_array = torch.full(u_array.shape, 4.0)
     
             active_vars = metadata.active_variables
@@ -750,7 +764,6 @@ class FoundationModelTrainer(TrainerBase):
                                   sample_rate=dataset_config.sample_rate,
                                   use_metadata_stats=dataset_config.use_metadata_stats,
                                   use_time_norm=dataset_config.use_time_norm)
-            
             train_dataset = DynamicPairDataset(u_train, c_train, t_values, metadata,
                                                max_time_diff=max_time_diff,
                                                stepper_mode=dataset_config.stepper_mode,
@@ -1126,15 +1139,22 @@ class FoundationModelTrainer(TrainerBase):
 
                         if example_data is None:
                             u_in_dim = stats["u"]["std"].shape[0]
+                        if "c" in self.stats:
+                            c_in_dim = self.stats["c"]["std"].shape[0]
+                            x_batch_input_u = x_batch[...,:u_in_dim].cpu().numpy() * self.stats["u"]["std"] + self.stats["u"]["mean"]
+                            x_batch_input_c = x_batch[...,u_in_dim:u_in_dim + c_in_dim].cpu().numpy() * self.stats["c"]["std"] + self.stats["c"]["mean"]
+                            x_batch_input = np.stack([x_batch_input_u,x_batch_input_c], axis=-1)
+                        else:
                             x_batch_input = x_batch[...,:u_in_dim].cpu().numpy() * stats["u"]["std"] + stats["u"]["mean"]
                             example_data = {
-                                'input': x_batch_input[0],
+                                'input': x_batch_input[-1],
                                 'coords': self.rigraphs[dataset_name].physical_to_regional.src_ndata['pos'].cpu().numpy(),
-                                'gt_sequence': np.concatenate((x_batch_input[0:1], y_batch_de_norm[0].cpu().numpy()),axis=0),
-                                'pred_sequence': np.concatenate((x_batch_input[0:1],pred_de_norm[0].cpu().numpy()),axis=0),
+                                'gt_sequence': y_batch_de_norm[-1].cpu().numpy(),
+                                'pred_sequence': pred_de_norm[-1].cpu().numpy(),
                                 'time_indices': time_indices,
                                 't_values': test_dataset.t_values
                             }
+                    
                     if pbar is not None:
                         pbar.close()
 
@@ -1146,18 +1166,46 @@ class FoundationModelTrainer(TrainerBase):
                 print(f"Results for {dataset_name}: {errors_dict}")
 
                 self.config.datarow[f"{dataset_name} relative error"] = errors_dict
+                # if example_data is not None:
+                #     self.plot_results(
+                #         coords=example_data['coords'],
+                #         input = example_data['input'],
+                #         gt_sequence=example_data['gt_sequence'],
+                #         pred_sequence=example_data['pred_sequence'],
+                #         time_indices=example_data['time_indices'],
+                #         t_values=example_data['t_values'],
+                #         dataset_name=dataset_name,
+                #         num_frames=example_data['gt_sequence'].shape[0],
+                #     )
+                
                 if example_data is not None:
-                    self.plot_results(
-                        coords=example_data['coords'],
-                        input = example_data['input'],
-                        gt_sequence=example_data['gt_sequence'],
-                        pred_sequence=example_data['pred_sequence'],
-                        time_indices=example_data['time_indices'],
-                        t_values=example_data['t_values'],
-                        dataset_name=dataset_name,
-                        num_frames=example_data['gt_sequence'].shape[0],
-                    )
-    
+                    if metadata.names['c']:
+                        fig = plot_estimates(
+                            u_inp = example_data['input'].squeeze(1),
+                            u_gtr = np.stack([example_data['gt_sequence'][-1],example_data['input'][...,-1]],axis=-1).squeeze(1),
+                            u_prd = np.stack([example_data['pred_sequence'][-1],example_data['input'][...,-1]],axis=-1).squeeze(1),
+                            x_inp = self.coord[0][0],
+                            x_out = self.coord[0][0],
+                            names = metadata.names['u'] + metadata.names['c'],
+                            symmetric = metadata.signed['u'] + metadata.signed['c'],
+                            domain = metadata.domain_x
+                        )
+                    
+                    else:
+                        fig = plot_estimates(
+                            u_inp = example_data['input'],
+                            u_gtr = example_data['gt_sequence'][-1],
+                            u_prd = example_data['pred_sequence'][-1],
+                            x_inp = self.coord[0][0],
+                            x_out = self.coord[0][0],
+                            names = metadata.names['u'],
+                            symmetric = metadata.signed['u'],
+                            domain = metadata.domain_x
+                        )
+                    
+                    fig.savefig(self.path_config.result_path,dpi=300,bbox_inches="tight", pad_inches=0.1)
+                    plt.close(fig)
+            
     def plot_results(self, coords, input, gt_sequence, pred_sequence, time_indices, t_values, dataset_name, num_frames=5):
         """
         Plots several frames of ground truth and predicted results using contour plots for all variables.
