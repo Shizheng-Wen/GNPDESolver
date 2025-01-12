@@ -11,7 +11,7 @@
     },
     "graph": {
         "periodic": false,
-        "sample_factor": 1000,
+        "sample_factor": 1024,
         "overlap_factor_p2r": 1,
         "overlap_factor_r2p": 1,
         "regional_level": 1,
@@ -28,20 +28,13 @@
             "gno": {
                 "gno_coord_dim": 2,
                 "projection_channels": 256,
-                "in_gno_channel_mlp_hidden_layers": [
-                    64,
-                    64,
-                    64
-                ],
-                "out_gno_channel_mlp_hidden_layers": [
-                    64,
-                    64
-                ],
-                "lifting_channels": 16,
-                "gno_radius": 0.033,
+                "in_gno_channel_mlp_hidden_layers": [64,64,64],
+                "out_gno_channel_mlp_hidden_layers": [64,64],
+                "lifting_channels": 32,
+                "gno_radius": 0.066,
                 "attention_type": "cosine",
                 "use_geoembed": true,
-                "embedding_method": "pointnet"
+                "embedding_method": "statistical"
             },
             "transformer": {
                 "patch_size": 2,
@@ -49,7 +42,7 @@
                 "use_attn_norm": true,
                 "use_ffn_norm": true,
                 "norm_eps": 1e-06,
-                "num_layers": 3,
+                "num_layers": 5,
                 "positional_embedding": "rope",
                  "use_long_range_skip": true,
                 "attn_config": {
@@ -84,14 +77,14 @@
     "optimizer": {
         "name": "adamw",
         "args": {
-            "lr": 0.001,
+            "lr": 1e-3,
             "weight_decay": 1e-05,
             "epoch": 500,
             "loss_scale": 1.0,
             "eval_every_eps": 2,
             "scheduler": "mix",
-            "max_lr": 0.001,
-            "min_lr": 0.0001,
+            "max_lr": 1e-3,
+            "min_lr": 1e-4,
             "final_lr": 5e-05
         }
     },

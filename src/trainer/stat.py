@@ -141,7 +141,7 @@ class StaticTrainer(TrainerBase):
         self.test_loader = DataLoader(test_ds, batch_size=dataset_config.batch_size, shuffle=dataset_config.shuffle, num_workers=dataset_config.num_workers)
 
     def init_graph(self, graph_config):
-        self.rigraph = RegionInteractionGraph.from_point_cloud(points = self.x_train[0][0],
+        self.rigraph = RegionInteractionGraph.from_point_cloud(points = self.x_train[0][0].cuda(),
                                               phy_domain=self.metadata.domain_x,
                                               **shallow_asdict(graph_config)
                                             )

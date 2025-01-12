@@ -94,19 +94,20 @@ class Triplane(Physical2Regional2Physical):
         input_geom = graph.physical_to_regional.src_ndata['pos']
         x_coords = input_geom[:, 0:1]
         y_coords = input_geom[:, 1:2]
-        num_queries = 64
-        queries = torch.linspace(-1, 1, steps=num_queries).unsqueeze(-1).to(pndata.device)  # [num_queries, 1]
-
+        
+        queries_x = torch.linspace(-1, 1, steps=self.H).unsqueeze(-1).to(pndata.device)  # [num_queries, 1]
+        queries_y = torch.linspace(-1, 1, steps=self.W).unsqueeze(-1).to(pndata.device)  # [num_queries, 1]
+        
         x_encoded = self.encoder(
             input_coords = x_coords,
-            queries = queries,
+            queries = queries_x,
             pndata = x_projected_data,
             axis_key="x"
         )
 
         y_encoded = self.encoder(
             input_coords = y_coords,
-            queries = queries,
+            queries = queries_y,
             pndata = y_projected_data,
             axis_key="y"
         )

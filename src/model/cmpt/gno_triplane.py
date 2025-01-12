@@ -400,16 +400,16 @@ class GNOEncoder(nn.Module):
         for idx, scale in enumerate(self.scales):
             spatial_nbrs = spatial_nbrs_scales[idx]
             encoded = self.gno(
-                y=graph.physical_to_regional.get_ndata()[0].to(pndata.device),
-                x=graph.physical_to_regional.get_ndata()[1][:,:-1].to(pndata.device),
+                y=input_coords,
+                x=queries,
                 f_y=pndata,
                 neighbors=spatial_nbrs
             )
 
             if hasattr(self, 'geoembed'):
                 geoembedding = self.geoembed(
-                    self.input_geom,
-                    self.latent_queries,
+                    input_coords,
+                    queries,
                     spatial_nbrs
                 )
                 geoembedding = geoembedding[None, :, :]
@@ -525,16 +525,16 @@ class GNODecoder(nn.Module):
         for idx, scale in enumerate(self.scales):
             spatial_nbrs = spatial_nbrs_scales[idx]
             decoded = self.gno(
-                y=graph.regional_to_physical.get_ndata()[0].to(device),
-                x=graph.regional_to_physical.get_ndata()[1][:,:-1].to(device),
+                y=input_coords,
+                x=queries,
                 f_y=rndata,
                 neighbors=spatial_nbrs
             )
 
             if hasattr(self, 'geoembed'):
                 geoembedding = self.geoembed(
-                    self.input_geom,
-                    self.latent_queries,
+                    input_coords,
+                    queries,
                     spatial_nbrs
                 )
                 geoembedding = geoembedding[None, :, :]

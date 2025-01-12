@@ -39,9 +39,31 @@ CONFIG_FILES=(
               # "gaot/abla/data_size/wave_l_sines/512.json"
               # "gaot/abla/data_size/wave_l_sines/1024.json"
               # "gaot/fd/finetune/wave_l_sines/fd_128.json"
-              "gaot/fd/finetune/wave_l_sines/fd_256.json"
-              "gaot/fd/finetune/wave_l_sines/fd_512.json"
-              "gaot/fd/finetune/wave_l_sines/fd_1024.json"
+              # "gaot/fd/finetune/wave_l_sines/fd_256.json"
+              # "gaot/fd/finetune/wave_l_sines/fd_512.json"
+              # "gaot/fd/finetune/wave_l_sines/fd_1024.json"
+# ----------------------Encoder-Processor-Decoder---------------------------------
+              # "rano/static/poisson_c_sines.json"
+              # "rano/fluid_data/sparse/ns_gauss.json"
+              # "rano/fluid_data/sparse/ns_pwc.json"
+              # "rano/fluid_data/sparse/ns_sl.json"
+              # "rano/fluid_data/sparse/ns_svs.json"
+
+
+              # "rfno/static/elasticity.json"
+              # "rfno/static/poisson_c_sines.json"
+              # "rfno/fluid_data/sparse/ns_gauss.json"
+              # "rfno/fluid_data/sparse/ns_pwc.json"
+              # "rfno/fluid_data/sparse/ns_sl.json"
+              # "rfno/fluid_data/sparse/ns_svs.json"
+# ----------------------Tokenization---------------------------------
+              # "gaot/subtoken/static/airfoil_grid.json"
+              # "gaot/subtoken/static/elasticity.json"
+              # "gaot/subtoken/static/poisson_c_sines.json"
+
+              "triplane/static/airfoil_grid.json"
+              "triplane/static/elasticity.json"
+              "triplane/static/poisson_c_sines.json"
               )
 for CONFIG_FILE in "${CONFIG_FILES[@]}"
 do

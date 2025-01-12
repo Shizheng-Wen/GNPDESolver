@@ -13,7 +13,7 @@ from ...utils.dataclass import shallow_asdict, safe_replace
 
 @dataclass
 class AugmentedMLPConfig:
-    hidden_size:int = 16 #64
+    hidden_size:int = 64
     num_layers:int = 3
     activation:str = "swish"
     use_layer_norm:bool = True
